@@ -1,0 +1,9 @@
+63f7b34db8d8cdea90c76aacccf841ec
+::res://::1761869058
+environment.tres::Environment::6929793752105062011::1761868242::0::1::::<><><>0<>0<><>::
+icon.svg::CompressedTexture2D::355357686329725281::1761868184::1761869064::1::::<><><>0<>0<>1eb70806a2dfabdea0786a00f4e5f7fa<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
+player.gd::GDScript::8494336360431296749::1761868297::0::1::::<>CharacterBody3D<><>0<>0<><>::
+player.tscn::PackedScene::4385403892911609558::1761868297::0::1::::<><><>0<>0<><>::res://player.gd
+sun.gd::GDScript::3381800701238262323::1761868368::0::1::::<>DirectionalLight3D<><>0<>0<><>::
+world.gd::GDScript::1879199741540701693::1761868368::0::1::::<>Node3D<><>0<>0<><>::
+world.tscn::PackedScene::7362887588786541161::1761868385::0::1::::<><><>0<>0<><>::uid://c5y3xqm8jnpqh::::res://environment.tres<>uid://b3qk7xm5nwpry::::res://player.tscn<>res://world.gd<>res://sun.gd
