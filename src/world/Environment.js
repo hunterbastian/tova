@@ -29,13 +29,15 @@ export class Environment {
         dirLight.position.set(100, 100, 50);
         dirLight.castShadow = true;
 
-        // Shadow properties for better quality
-        dirLight.shadow.mapSize.width = 4096;
-        dirLight.shadow.mapSize.height = 4096;
+        // Shadow properties tuned for a balance of quality and performance.
+        // On many Macs, a 1024x1024 shadow map is a good compromise between
+        // visual quality and framerate.
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
         dirLight.shadow.camera.near = 0.5;
-        dirLight.shadow.camera.far = 500;
+        dirLight.shadow.camera.far = 350;
 
-        const d = 200;
+        const d = 160;
         dirLight.shadow.camera.left = -d;
         dirLight.shadow.camera.right = d;
         dirLight.shadow.camera.top = d;

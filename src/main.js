@@ -9,7 +9,11 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(0, 20, 50); // Higher starting position to see the terrain
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// Slightly lower default quality for smoother performance on typical Macs.
+// Antialiasing is disabled and pixel ratio is capped at 1.25 to avoid very high
+// resolutions on Retina displays.
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -39,10 +43,10 @@ const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-bloomPass.threshold = 0.2; // Lower threshold to make more things glow
-bloomPass.strength = 0.8; // High strength for that "bloom" look
-bloomPass.radius = 0.5;
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
+bloomPass.threshold = 0.3; // Slightly higher threshold so fewer pixels glow
+bloomPass.strength = 0.4; // Lower strength for a subtler, cheaper bloom
+bloomPass.radius = 0.4;
 composer.addPass(bloomPass);
 
 const outputPass = new OutputPass();

@@ -9,8 +9,18 @@ export class Town {
     }
 
     init() {
-        const houseMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // Wood
-        const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x800000 }); // Red roof
+        const houseMaterial = new THREE.MeshStandardMaterial({
+            color: 0x8B4513, // Wood
+            roughness: 1.0,
+            metalness: 0.0,
+            flatShading: true
+        });
+        const roofMaterial = new THREE.MeshStandardMaterial({
+            color: 0x800000, // Red roof
+            roughness: 1.0,
+            metalness: 0.0,
+            flatShading: true
+        });
 
         const houseGeo = new THREE.BoxGeometry(4, 4, 4);
         const roofGeo = new THREE.ConeGeometry(3.5, 2, 4);

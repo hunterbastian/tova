@@ -4,6 +4,12 @@ export class Terrain {
     constructor(scene) {
         this.scene = scene;
         this.mesh = null;
+
+        // Reuse a single raycaster and vectors for height queries (avoids per-frame allocations).
+        this.raycaster = new THREE.Raycaster();
+        this.downVector = new THREE.Vector3(0, -1, 0);
+        this.rayOrigin = new THREE.Vector3();
+
         this.init();
     }
 
@@ -44,17 +50,20 @@ export class Terrain {
                 height -= 20; // Drop down for ocean
             }
 
+            // Quantize height a bit to give a more "stepped" / voxel-like feeling.
+            height = Math.round(height / 2) * 2;
+
             positionAttribute.setZ(i, height); // Set Z because PlaneGeometry is XY by default
         }
 
         geometry.computeVertexNormals();
 
-        // Material with some texture mixing (placeholder color for now)
+        // Material tuned for a more voxel-like, flat-shaded look.
         const material = new THREE.MeshStandardMaterial({
             color: 0x3a5f0b,
-            roughness: 0.8,
-            metalness: 0.1,
-            flatShading: false,
+            roughness: 0.9,
+            metalness: 0.0,
+            flatShading: true,
             side: THREE.DoubleSide
         });
 
@@ -67,11 +76,10 @@ export class Terrain {
     }
 
     getHeightAt(x, z) {
-        // Raycaster approach is accurate but expensive. 
-        // For now, we can approximate or use a raycaster downwards from high up.
-        const raycaster = new THREE.Raycaster();
-        raycaster.set(new THREE.Vector3(x, 100, z), new THREE.Vector3(0, -1, 0));
-        const intersects = raycaster.intersectObject(this.mesh);
+        // Reuse a single raycaster to keep per-frame allocations low.
+        this.rayOrigin.set(x, 100, z);
+        this.raycaster.set(this.rayOrigin, this.downVector);
+        const intersects = this.raycaster.intersectObject(this.mesh, false);
         if (intersects.length > 0) {
             return intersects[0].point.y;
         }
