@@ -68,3 +68,22 @@ src/
 - PascalCase for classes
 - Single quotes for strings preferred in some files, double in others (be consistent with file you're editing)
 - Constants at class level (e.g., `this.walkSpeed = 30`)
+
+## Versioning
+
+This project uses [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`):
+
+- **MAJOR**: Breaking changes or major milestones
+- **MINOR**: New features (structures, controls, world elements)
+- **PATCH**: Bug fixes and small tweaks
+
+Current version is in `package.json`. The project is in `0.x.x` pre-release phase.
+
+### Changelog
+
+All notable changes are documented in `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com) format.
+
+When making changes:
+1. Add entry under `[Unreleased]` section in CHANGELOG.md
+2. Use categories: Added, Changed, Deprecated, Removed, Fixed, Security
+3. Bump version in package.json when releasing
