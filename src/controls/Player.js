@@ -25,6 +25,17 @@ export class Player {
         this.eyeHeight = 3;
         this.groundSnapSpeed = 10; // higher = quicker snapping to terrain
 
+        // View bobbing (DOOM-style head bob while moving)
+        this.bobTime = 0;
+        this.bobSpeed = 10;        // How fast the bob cycles
+        this.bobAmountY = 0.15;    // Vertical bob intensity
+        this.bobAmountX = 0.08;    // Horizontal bob intensity
+        this.baseCameraY = 0;      // Store base Y for bob offset
+
+        // Weapon viewmodel
+        this.weaponElement = null;
+        this.weaponBobOffset = { x: 0, y: 0 };
+
         // Simple chat UI for commands like `fly` / `walk`
         this.chatOpen = false;
 
@@ -195,9 +206,52 @@ export class Player {
 
         document.addEventListener('keydown', onKeyDown);
         document.addEventListener('keyup', onKeyUp);
+
+        // Create DOOM-style weapon viewmodel
+        this.createWeaponViewmodel();
+    }
+
+    createWeaponViewmodel() {
+        const weapon = document.createElement('div');
+        weapon.style.position = 'fixed';
+        weapon.style.bottom = '0';
+        weapon.style.left = '50%';
+        weapon.style.transform = 'translateX(-50%)';
+        weapon.style.width = '200px';
+        weapon.style.height = '200px';
+        weapon.style.pointerEvents = 'none';
+        weapon.style.zIndex = '100';
+        weapon.style.imageRendering = 'pixelated';
+
+        // Create a simple fist/hand sprite using CSS (placeholder for actual sprite)
+        weapon.innerHTML = `
+            <svg viewBox="0 0 64 64" style="width: 100%; height: 100%;">
+                <defs>
+                    <linearGradient id="skinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#d4a574"/>
+                        <stop offset="100%" style="stop-color:#c4956a"/>
+                    </linearGradient>
+                </defs>
+                <!-- Arm -->
+                <rect x="20" y="40" width="24" height="30" fill="url(#skinGrad)" rx="4"/>
+                <!-- Fist -->
+                <ellipse cx="32" cy="38" rx="14" ry="10" fill="url(#skinGrad)"/>
+                <!-- Knuckles -->
+                <circle cx="26" cy="36" r="3" fill="#b8896a"/>
+                <circle cx="32" cy="34" r="3" fill="#b8896a"/>
+                <circle cx="38" cy="36" r="3" fill="#b8896a"/>
+                <!-- Sleeve -->
+                <rect x="18" y="58" width="28" height="10" fill="#4a3728" rx="2"/>
+            </svg>
+        `;
+
+        document.body.appendChild(weapon);
+        this.weaponElement = weapon;
     }
 
     update(delta) {
+        const isMoving = this.moveForward || this.moveBackward || this.moveLeft || this.moveRight;
+
         if (this.controls.isLocked === true) {
             const forward = Number(this.moveForward) - Number(this.moveBackward);
             const strafe = Number(this.moveRight) - Number(this.moveLeft);
@@ -223,6 +277,47 @@ export class Player {
         if (!this.isFlying) {
             this.alignToTerrain(delta);
         }
+
+        // Update view bobbing
+        this.updateViewBob(delta, isMoving);
+
+        // Update weapon bob
+        this.updateWeaponBob(isMoving);
+    }
+
+    updateViewBob(delta, isMoving) {
+        if (isMoving && this.controls.isLocked) {
+            this.bobTime += delta * this.bobSpeed;
+        } else {
+            // Smoothly return to center when not moving
+            this.bobTime *= 0.9;
+        }
+
+        // Apply bob offset to camera rotation (subtle head tilt effect)
+        const bobY = Math.sin(this.bobTime) * this.bobAmountY;
+        const bobX = Math.cos(this.bobTime * 0.5) * this.bobAmountX;
+
+        // Apply to camera euler (subtle roll for that DOOM feel)
+        this.camera.rotation.z = bobX * 0.5;
+
+        // Store bob values for weapon
+        this.weaponBobOffset.x = bobX * 30;
+        this.weaponBobOffset.y = Math.abs(bobY) * 20;
+    }
+
+    updateWeaponBob(isMoving) {
+        if (!this.weaponElement) return;
+
+        // Weapon bobs with movement, returns to center when still
+        const targetX = isMoving ? this.weaponBobOffset.x : 0;
+        const targetY = isMoving ? this.weaponBobOffset.y : 0;
+
+        // Smooth interpolation for weapon position
+        const currentTransform = this.weaponElement.style.transform;
+        const baseX = -50; // Center offset from translateX(-50%)
+
+        this.weaponElement.style.transform =
+            `translateX(calc(${baseX}% + ${targetX}px)) translateY(${targetY}px)`;
     }
 
     alignToTerrain(delta) {

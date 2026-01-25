@@ -7,6 +7,11 @@ adhering to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- DOOM-style pixelation post-process shader for retro chunky visuals
+- View bobbing while moving (subtle head sway effect)
+- First-person weapon viewmodel with movement bob
+
 ## [0.1.0] - 2026-01-25
 
 ### Added

@@ -37,11 +37,17 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { PixelationPass } from './postprocessing/PixelationPass.js';
 
 const composer = new EffectComposer(renderer);
 
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
+
+// DOOM-style pixelation effect (pixel size 4 = chunky retro look)
+const pixelationPass = new PixelationPass(4);
+pixelationPass.setSize(window.innerWidth, window.innerHeight);
+composer.addPass(pixelationPass);
 
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
 bloomPass.threshold = 0.3; // Slightly higher threshold so fewer pixels glow
@@ -58,6 +64,7 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
+    pixelationPass.setSize(window.innerWidth, window.innerHeight);
 });
 
 import { Player } from './controls/Player.js';
