@@ -88,6 +88,12 @@ export class Player {
             this.chatOpen = true;
             this.chatContainer.style.display = 'block';
             this.chatInput.value = '';
+            this.moveForward = false;
+            this.moveBackward = false;
+            this.moveLeft = false;
+            this.moveRight = false;
+            this.moveUp = false;
+            this.moveDown = false;
             this.chatInput.focus();
         };
 
@@ -162,10 +168,6 @@ export class Player {
         };
 
         const onKeyUp = (event) => {
-            if (this.chatOpen) {
-                return;
-            }
-
             switch (event.code) {
                 case 'ArrowUp':
                 case 'KeyW':
