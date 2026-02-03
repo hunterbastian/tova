@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { Environment } from './world/Environment.js';
 import { Terrain } from './world/Terrain.js';
 import { Ocean } from './world/Ocean.js';
+import { Mountains } from './world/Mountains.js';
+import { Forest } from './world/Forest.js';
 import { Castle } from './structures/Castle.js';
 import { Town } from './structures/Town.js';
 import { Player } from './controls/Player.js';
@@ -44,7 +46,7 @@ timeBar.style.position = 'absolute';
 timeBar.style.top = '16px';
 timeBar.style.left = '50%';
 timeBar.style.transform = 'translateX(-50%)';
-timeBar.style.width = '240px';
+timeBar.style.width = '200px';
 timeBar.style.padding = '4px 6px';
 timeBar.style.borderRadius = '8px';
 timeBar.style.background = 'rgba(6, 10, 18, 0.2)';
@@ -71,13 +73,10 @@ timeIcon.style.justifyContent = 'center';
 timeIcon.style.width = '12px';
 timeIcon.style.height = '12px';
 
-const timeText = document.createElement('span');
-timeText.textContent = 'Daylight · 2:00 to sunset';
 timeBarLabel.appendChild(timeIcon);
-timeBarLabel.appendChild(timeText);
 
 const timeBarTrack = document.createElement('div');
-timeBarTrack.style.marginTop = '4px';
+timeBarTrack.style.marginTop = '2px';
 timeBarTrack.style.height = '3px';
 timeBarTrack.style.borderRadius = '999px';
 timeBarTrack.style.background = 'rgba(255, 255, 255, 0.15)';
@@ -94,6 +93,34 @@ timeBarTrack.appendChild(timeBarFill);
 timeBar.appendChild(timeBarLabel);
 timeBar.appendChild(timeBarTrack);
 document.body.appendChild(timeBar);
+
+const stats = document.createElement('div');
+stats.style.position = 'absolute';
+stats.style.top = '16px';
+stats.style.left = '16px';
+stats.style.display = 'flex';
+stats.style.flexDirection = 'column';
+stats.style.gap = '4px';
+stats.style.padding = '6px 8px';
+stats.style.borderRadius = '8px';
+stats.style.background = 'rgba(6, 10, 18, 0.2)';
+stats.style.backdropFilter = 'blur(6px)';
+stats.style.fontFamily = 'monospace';
+stats.style.color = '#dfe7ff';
+stats.style.fontSize = '11px';
+stats.style.letterSpacing = '0.06em';
+stats.style.pointerEvents = 'none';
+stats.style.zIndex = '2';
+
+const fpsLabel = document.createElement('div');
+fpsLabel.textContent = 'FPS 60';
+
+const coordsLabel = document.createElement('div');
+coordsLabel.textContent = 'X 0.0 Y 0.0 Z 0.0';
+
+stats.appendChild(fpsLabel);
+stats.appendChild(coordsLabel);
+document.body.appendChild(stats);
 
 const hud = document.createElement('div');
 hud.style.position = 'absolute';
@@ -176,6 +203,8 @@ setTimeIcon(true);
 const environment = new Environment(scene, { enableShadows: perf.enableShadows, dayLength: 120, nightLength: 120 });
 const terrain = new Terrain(scene, { enableShadows: perf.enableShadows });
 const ocean = new Ocean(scene);
+const mountains = new Mountains(scene, { radius: 420, height: 210, layers: 4, haze: 0.12, baseLift: 10 });
+const forest = new Forest(scene, terrain, { enableShadows: perf.enableShadows });
 
 const castle = new Castle(scene, terrain, { enableShadows: perf.enableShadows });
 const town = new Town(scene, terrain, { enableShadows: perf.enableShadows });
@@ -255,33 +284,48 @@ const player = new Player(scene, camera, terrain, {
 // Animation Loop
 const clock = new THREE.Clock();
 
-const formatCountdown = (value) => {
-    const total = Math.max(0, Math.ceil(value));
-    const minutes = Math.floor(total / 60);
-    const seconds = total % 60;
-    return `${minutes}:${String(seconds).padStart(2, '0')}`;
-};
+let fpsTimer = 0;
+let fpsFrames = 0;
+let uiTimer = 0;
 
 function animate() {
     requestAnimationFrame(animate);
 
     const delta = clock.getDelta();
     const time = clock.getElapsedTime();
+    uiTimer += delta;
+
+    fpsFrames += 1;
+    fpsTimer += delta;
+    if (fpsTimer >= 0.5) {
+        const fps = Math.round(fpsFrames / fpsTimer);
+        fpsLabel.textContent = `FPS ${fps}`;
+        fpsTimer = 0;
+        fpsFrames = 0;
+    }
 
     ocean.update(time);
     player.update(delta);
     const cycle = environment.update(time, player.playerObject.position);
     if (cycle) {
         castle.setNightGlow(cycle.night * 0.55);
+    }
+    mountains.update(player.playerObject.position);
 
-        const cycleLength = cycle.isDay ? environment.dayLength : environment.nightLength;
-        const progress = cycleLength === 0 ? 0 : (cycleLength - cycle.timeToNext) / cycleLength;
-        timeBarFill.style.width = `${Math.max(0, Math.min(1, progress)) * 100}%`;
-        timeBarFill.style.background = cycle.isDay
-            ? 'linear-gradient(90deg, #f7b46a, #fff1d0)'
-            : 'linear-gradient(90deg, #2a3f6e, #a0b6ff)';
-        timeText.textContent = `${cycle.isDay ? 'Daylight' : 'Night'} · ${formatCountdown(cycle.timeToNext)} to ${cycle.isDay ? 'sunset' : 'sunrise'}`;
-        setTimeIcon(cycle.isDay);
+    if (uiTimer >= 0.1) {
+        uiTimer = 0;
+        const pos = player.playerObject.position;
+        coordsLabel.textContent = `X ${pos.x.toFixed(1)} Y ${pos.y.toFixed(1)} Z ${pos.z.toFixed(1)}`;
+
+        if (cycle) {
+            const cycleLength = cycle.isDay ? environment.dayLength : environment.nightLength;
+            const progress = cycleLength === 0 ? 0 : (cycleLength - cycle.timeToNext) / cycleLength;
+            timeBarFill.style.width = `${Math.max(0, Math.min(1, progress)) * 100}%`;
+            timeBarFill.style.background = cycle.isDay
+                ? 'linear-gradient(90deg, #f7b46a, #fff1d0)'
+                : 'linear-gradient(90deg, #2a3f6e, #a0b6ff)';
+            setTimeIcon(cycle.isDay);
+        }
     }
 
     // Simple camera rotation for overview

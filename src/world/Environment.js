@@ -11,7 +11,7 @@ export class Environment {
         this.colors = {
             skyDay: new THREE.Color(0x87ceeb),
             skyNight: new THREE.Color(0x0b1b2e),
-            fogDay: new THREE.Color(0xcfe3ff),
+            fogDay: new THREE.Color(0xc3d7ef),
             fogNight: new THREE.Color(0x0a1424),
             sunDay: new THREE.Color(0xfff1d0),
             sunNight: new THREE.Color(0x4a5a86),
@@ -19,6 +19,15 @@ export class Environment {
             fogGolden: new THREE.Color(0xf2b178),
             sunGolden: new THREE.Color(0xffb15e)
         };
+
+        this._sunColor = new THREE.Color();
+        this._skyColor = new THREE.Color();
+        this._fogColor = new THREE.Color();
+        this._hemiColor = new THREE.Color();
+        this._groundColor = new THREE.Color();
+        this._groundDay = new THREE.Color(0x2c3b2b);
+        this._groundNight = new THREE.Color(0x0b0f1a);
+        this._white = new THREE.Color(0xffffff);
 
         this.ambientLight = null;
         this.hemiLight = null;
@@ -89,12 +98,19 @@ export class Environment {
             : naturalIsDay;
 
         let angle;
-        if (isDay) {
+        let timeToNext;
+        if (this.overrideMode) {
+            // Force a stable midday / midnight position when overridden.
+            angle = isDay ? Math.PI * 0.5 : Math.PI * 1.5;
+            timeToNext = this.cycleLength;
+        } else if (isDay) {
             const dayT = cycle / dayFraction; // 0..1
             angle = dayT * Math.PI; // sunrise -> sunset
+            timeToNext = this.dayLength - cycleTime;
         } else {
             const nightT = (cycle - dayFraction) / (1 - dayFraction);
             angle = Math.PI + nightT * Math.PI; // below horizon
+            timeToNext = this.cycleLength - cycleTime;
         }
 
         const sunElevation = Math.sin(angle);
@@ -119,19 +135,19 @@ export class Environment {
         const goldenPeak = goldenRamp * (1 - THREE.MathUtils.smoothstep(sunElevation, 0.45, 0.9));
         const goldenBlend = Math.min(1, goldenPeak * 1.35);
 
-        const sunColor = this.colors.sunNight
-            .clone()
+        const sunColor = this._sunColor
+            .copy(this.colors.sunNight)
             .lerp(this.colors.sunDay, smoothDaylight)
             .lerp(this.colors.sunGolden, goldenBlend);
         this.sunLight.color.copy(sunColor);
         this.sunLight.intensity = 0.2 + smoothDaylight * 1.25;
 
-        const skyColor = this.colors.skyNight
-            .clone()
+        const skyColor = this._skyColor
+            .copy(this.colors.skyNight)
             .lerp(this.colors.skyDay, smoothDaylight)
             .lerp(this.colors.skyGolden, goldenBlend);
-        const fogColor = this.colors.fogNight
-            .clone()
+        const fogColor = this._fogColor
+            .copy(this.colors.fogNight)
             .lerp(this.colors.fogDay, smoothDaylight)
             .lerp(this.colors.fogGolden, goldenBlend);
         this.scene.background.copy(skyColor);
@@ -141,14 +157,10 @@ export class Environment {
 
         this.ambientLight.intensity = 0.28 + smoothDaylight * 0.32;
         this.hemiLight.intensity = 0.32 + smoothDaylight * 0.4;
-        this.hemiLight.color.copy(skyColor.clone().lerp(new THREE.Color(0xffffff), 0.35));
+        this.hemiLight.color.copy(this._hemiColor.copy(skyColor).lerp(this._white, 0.35));
         this.hemiLight.groundColor.copy(
-            new THREE.Color(0x0b0f1a).lerp(new THREE.Color(0x2c3b2b), smoothDaylight)
+            this._groundColor.copy(this._groundNight).lerp(this._groundDay, smoothDaylight)
         );
-
-        const timeToNext = isDay
-            ? this.dayLength - cycleTime
-            : this.cycleLength - cycleTime;
 
         return {
             daylight: smoothDaylight,

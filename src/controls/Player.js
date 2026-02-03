@@ -117,9 +117,9 @@ export class Player {
                 return;
             }
 
-            if (cmd === 'fly') {
+            if (cmd === 'fly' || cmd === '/fly') {
                 this.isFlying = true;
-            } else if (cmd === 'walk') {
+            } else if (cmd === 'walk' || cmd === '/walk') {
                 this.isFlying = false;
                 // Snap back to terrain when returning to walk mode.
                 this.alignToTerrain(0);

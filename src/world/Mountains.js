@@ -25,6 +25,9 @@ export class Mountains {
         this.seed = options.seed ?? 7381;
         this.haze = options.haze ?? 0.12;
         this.baseLift = options.baseLift ?? 6;
+        this.jaggedness = options.jaggedness ?? 0.35;
+        this.snowlineStart = options.snowlineStart ?? 0.58;
+        this.snowlineFade = options.snowlineFade ?? 0.18;
 
         this.init();
     }
@@ -58,10 +61,10 @@ export class Mountains {
         const colors = new Float32Array(vertexCount * 3);
         const indices = [];
 
-        const green = new THREE.Color(0x3f7a3e);
-        const rock = new THREE.Color(0x5f6e7a);
-        const snow = new THREE.Color(0xeaf6ff);
-        const tint = lerpColor(new THREE.Color(0xffffff), new THREE.Color(0xc9def4), snowBias * 0.7);
+        const green = new THREE.Color(0x3a6b45);
+        const rock = new THREE.Color(0x4f5e6b);
+        const snow = new THREE.Color(0xe7f5ff);
+        const tint = lerpColor(new THREE.Color(0xffffff), new THREE.Color(0xc2d7ef), snowBias * 0.75);
 
         for (let i = 0; i <= segments; i += 1) {
             const t = i / segments;
@@ -69,8 +72,10 @@ export class Mountains {
             const noise =
                 Math.sin(t * Math.PI * 4 + rng() * 2) * 0.35 +
                 Math.sin(t * Math.PI * 10 + rng() * 4) * 0.22 +
-                (rng() - 0.5) * 0.2;
-            const ridgeHeight = height * (0.6 + noise);
+                Math.sin(t * Math.PI * 22 + rng() * 6) * (0.12 + this.jaggedness * 0.18) +
+                (rng() - 0.5) * (0.22 + this.jaggedness * 0.2);
+            const jaggedBoost = 0.15 + this.jaggedness * 0.35;
+            const ridgeHeight = height * (0.58 + noise + Math.max(0, noise) * jaggedBoost);
             const ridgeRadius = radius + (rng() - 0.5) * 12;
 
             const x = Math.cos(angle) * ridgeRadius;
@@ -89,11 +94,17 @@ export class Mountains {
 
             const heightT = clamp(ridgeHeight / height, 0, 1);
             let topColor = green.clone();
-            if (heightT > 0.4) {
-                topColor = lerpColor(green, rock, (heightT - 0.4) / 0.35);
+            const rockStart = Math.max(0.35, this.snowlineStart - 0.28);
+            const rockFade = 0.32;
+            if (heightT > rockStart) {
+                topColor = lerpColor(green, rock, (heightT - rockStart) / rockFade);
             }
-            if (heightT > 0.7) {
-                topColor = lerpColor(rock, snow, (heightT - 0.7) / 0.3);
+            if (heightT > this.snowlineStart) {
+                topColor = lerpColor(
+                    rock,
+                    snow,
+                    (heightT - this.snowlineStart) / Math.max(0.08, this.snowlineFade)
+                );
             }
             topColor.multiply(tint);
 

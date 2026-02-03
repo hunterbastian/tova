@@ -9,8 +9,17 @@ export class Terrain {
         this.segments = 128;
         this.step = this.size / this.segments;
         this.positionArray = null;
+        this.valleyCenter = options.valleyCenter ?? 0;
+        this.valleyWidth = options.valleyWidth ?? 140;
+        this.valleyDepth = options.valleyDepth ?? 18;
+        this.valleyAxis = options.valleyAxis === 'z' ? 'z' : 'x';
 
         this.init();
+    }
+
+    smoothstep(edge0, edge1, x) {
+        const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+        return t * t * (3 - 2 * t);
     }
 
     init() {
@@ -50,6 +59,20 @@ export class Terrain {
                 height -= 20; // Drop down for ocean
             }
 
+            // Glacial valley carve (U-shaped profile)
+            const axisCoord = this.valleyAxis === 'z' ? vertex.y : vertex.x;
+            const valleyDistance = Math.abs(axisCoord - this.valleyCenter);
+            const valleyBlend = 1 - this.smoothstep(this.valleyWidth * 0.2, this.valleyWidth, valleyDistance);
+            if (valleyBlend > 0) {
+                const uShape = 1 - Math.pow(valleyDistance / this.valleyWidth, 2);
+                height -= this.valleyDepth * valleyBlend * Math.max(0, uShape);
+                if (valleyDistance > this.valleyWidth * 0.35) {
+                    height += this.valleyDepth * 0.12 * valleyBlend;
+                }
+                const floorBlend = 1 - this.smoothstep(0, this.valleyWidth * 0.25, valleyDistance);
+                height = THREE.MathUtils.lerp(height, height * 0.35, floorBlend * 0.4);
+            }
+
             // Quantize height a bit to give a more "stepped" / voxel-like feeling.
             height = Math.round(height / 2) * 2;
 
@@ -70,6 +93,8 @@ export class Terrain {
         this.mesh.rotation.x = -Math.PI / 2;
         this.mesh.receiveShadow = this.enableShadows;
         this.mesh.castShadow = this.enableShadows;
+        this.mesh.matrixAutoUpdate = false;
+        this.mesh.updateMatrix();
 
         this.scene.add(this.mesh);
 

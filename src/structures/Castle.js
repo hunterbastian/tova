@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export class Castle {
     constructor(scene, terrain, options = {}) {
@@ -18,13 +19,25 @@ export class Castle {
             metalness: 0.1
         });
 
+        const geometries = [];
+        const tempPos = new THREE.Vector3();
+        const tempQuat = new THREE.Quaternion();
+        const tempEuler = new THREE.Euler();
+        const tempMatrix = new THREE.Matrix4();
+
+        const addGeometry = (geometry, x, y, z, rotationY = 0) => {
+            const cloned = geometry.clone();
+            tempPos.set(x, y, z);
+            tempEuler.set(0, rotationY, 0);
+            tempQuat.setFromEuler(tempEuler);
+            tempMatrix.compose(tempPos, tempQuat, new THREE.Vector3(1, 1, 1));
+            cloned.applyMatrix4(tempMatrix);
+            geometries.push(cloned);
+        };
+
         // Main Keep
         const keepGeo = new THREE.BoxGeometry(15, 30, 15);
-        const keep = new THREE.Mesh(keepGeo, stoneMaterial);
-        keep.position.y = 15; // Half height
-        keep.castShadow = this.enableShadows;
-        keep.receiveShadow = this.enableShadows;
-        this.group.add(keep);
+        addGeometry(keepGeo, 0, 15, 0);
 
         // Towers at corners
         const towerGeo = new THREE.CylinderGeometry(4, 5, 25, 8);
@@ -35,12 +48,8 @@ export class Castle {
             { x: -15, z: -15 }
         ];
 
-        towerPositions.forEach(pos => {
-            const tower = new THREE.Mesh(towerGeo, stoneMaterial);
-            tower.position.set(pos.x, 12.5, pos.z);
-            tower.castShadow = this.enableShadows;
-            tower.receiveShadow = this.enableShadows;
-            this.group.add(tower);
+        towerPositions.forEach((pos) => {
+            addGeometry(towerGeo, pos.x, 12.5, pos.z);
         });
 
         // Walls connecting towers
@@ -52,20 +61,34 @@ export class Castle {
             { x: -15, z: 0, rot: Math.PI / 2 }
         ];
 
-        wallPositions.forEach(pos => {
-            const wall = new THREE.Mesh(wallGeo, stoneMaterial);
-            wall.position.set(pos.x, 7.5, pos.z);
-            wall.rotation.y = pos.rot;
-            wall.castShadow = false;
-            wall.receiveShadow = this.enableShadows;
-            this.group.add(wall);
+        wallPositions.forEach((pos) => {
+            addGeometry(wallGeo, pos.x, 7.5, pos.z, pos.rot);
         });
+
+        const merged = mergeGeometries(geometries, false);
+        if (merged) {
+            const castleMesh = new THREE.Mesh(merged, stoneMaterial);
+            castleMesh.castShadow = this.enableShadows;
+            castleMesh.receiveShadow = this.enableShadows;
+            castleMesh.matrixAutoUpdate = false;
+            castleMesh.updateMatrix();
+            this.group.add(castleMesh);
+        }
 
         // Position the entire castle on top of the hill (0,0)
         // We know the hill is at 0,0 and roughly height 40 from Terrain.js
         // But let's use getHeightAt to be safe if we move it
         const hillHeight = this.terrain.getHeightAt(0, 0);
         this.group.position.set(0, hillHeight, 0);
+
+        this.group.traverse((child) => {
+            if (child.isMesh) {
+                child.matrixAutoUpdate = false;
+                child.updateMatrix();
+            }
+        });
+        this.group.matrixAutoUpdate = false;
+        this.group.updateMatrix();
 
         this.scene.add(this.group);
 
