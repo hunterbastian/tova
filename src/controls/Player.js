@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 
 export class Player {
-    constructor(scene, camera, terrain) {
+    constructor(scene, camera, terrain, options = {}) {
         this.scene = scene;
         this.camera = camera;
         this.terrain = terrain;
+        this.onCommand = options.onCommand ?? null;
 
         this.controls = new PointerLockControls(camera, document.body);
         this.playerObject = this.controls.getObject();
@@ -106,6 +107,16 @@ export class Player {
             const cmd = raw.trim().toLowerCase();
             if (!cmd) return;
 
+            if (cmd === 'day' || cmd === '/day') {
+                if (this.onCommand) this.onCommand('day');
+                return;
+            }
+
+            if (cmd === 'night' || cmd === '/night') {
+                if (this.onCommand) this.onCommand('night');
+                return;
+            }
+
             if (cmd === 'fly') {
                 this.isFlying = true;
             } else if (cmd === 'walk') {
@@ -130,6 +141,11 @@ export class Player {
                 if (event.key === 'Escape') {
                     closeChat();
                 }
+                return;
+            }
+
+            if (event.shiftKey && event.code === 'Tab') {
+                event.preventDefault();
                 return;
             }
 

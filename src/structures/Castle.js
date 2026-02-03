@@ -6,6 +6,7 @@ export class Castle {
         this.terrain = terrain;
         this.group = new THREE.Group();
         this.enableShadows = options.enableShadows ?? true;
+        this.glowLight = null;
         this.init();
     }
 
@@ -67,5 +68,14 @@ export class Castle {
         this.group.position.set(0, hillHeight, 0);
 
         this.scene.add(this.group);
+
+        this.glowLight = new THREE.PointLight(0xffc98b, 0, 120, 2);
+        this.glowLight.position.set(0, 22, 0);
+        this.group.add(this.glowLight);
+    }
+
+    setNightGlow(intensity) {
+        if (!this.glowLight) return;
+        this.glowLight.intensity = Math.max(0, intensity);
     }
 }
