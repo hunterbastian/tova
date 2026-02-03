@@ -154,7 +154,7 @@ export class Environment {
             .lerp(this.colors.sunDay, smoothDaylight)
             .lerp(this.colors.sunGolden, goldenBlend);
         this.sunLight.color.copy(sunColor);
-        this.sunLight.intensity = 0.28 + smoothDaylight * 1.4;
+        this.sunLight.intensity = 0.3 + smoothDaylight * 1.45;
 
         const skyColor = this._skyColor
             .copy(this.colors.skyNight)
@@ -169,14 +169,14 @@ export class Environment {
             this.scene.fog.color.copy(fogColor);
         }
 
-        this.ambientLight.intensity = 0.24 + smoothDaylight * 0.26;
-        this.hemiLight.intensity = 0.35 + smoothDaylight * 0.45;
+        this.ambientLight.intensity = 0.3 + smoothDaylight * 0.28;
+        this.hemiLight.intensity = 0.42 + smoothDaylight * 0.5;
         this.hemiLight.color.copy(this._hemiColor.copy(skyColor).lerp(this._white, 0.35));
         this.hemiLight.groundColor.copy(
             this._groundColor.copy(this._groundNight).lerp(this._groundDay, smoothDaylight)
         );
         if (this.bounceLight) {
-            this.bounceLight.intensity = 0.18 + smoothDaylight * 0.28;
+            this.bounceLight.intensity = 0.24 + smoothDaylight * 0.34;
         }
 
         return {

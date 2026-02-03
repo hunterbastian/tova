@@ -93,6 +93,8 @@ export class Terrain {
         this.mesh.rotation.x = -Math.PI / 2;
         this.mesh.receiveShadow = this.enableShadows;
         this.mesh.castShadow = this.enableShadows;
+        // Enable a dedicated lighting layer for terrain-only fill light.
+        this.mesh.layers.enable(1);
         this.mesh.matrixAutoUpdate = false;
         this.mesh.updateMatrix();
 

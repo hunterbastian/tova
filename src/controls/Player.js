@@ -26,8 +26,8 @@ export class Player {
         this.eyeHeight = 3;
         this.groundSnapSpeed = 10; // higher = quicker snapping to terrain
         this.walkSwayTime = 0;
-        this.walkSwayAmount = 0.006;
-        this.walkSwaySpeed = 3.5;
+        this.walkSwayAmount = 0.0035;
+        this.walkSwaySpeed = 2.2;
 
         // Simple chat UI for commands like `fly` / `walk`
         this.chatOpen = false;
@@ -250,6 +250,9 @@ export class Player {
         if (!this.isFlying) {
             this.alignToTerrain(delta);
         }
+
+        const maxPitch = Math.PI / 2 - 0.05;
+        this.camera.rotation.x = Math.max(-maxPitch, Math.min(maxPitch, this.camera.rotation.x));
 
         if (!this.isFlying && isMoving) {
             this.walkSwayTime += delta * this.walkSwaySpeed;
