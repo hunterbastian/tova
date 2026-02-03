@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 
 export class Castle {
-    constructor(scene, terrain) {
+    constructor(scene, terrain, options = {}) {
         this.scene = scene;
         this.terrain = terrain;
         this.group = new THREE.Group();
+        this.enableShadows = options.enableShadows ?? true;
         this.init();
     }
 
@@ -20,8 +21,8 @@ export class Castle {
         const keepGeo = new THREE.BoxGeometry(15, 30, 15);
         const keep = new THREE.Mesh(keepGeo, stoneMaterial);
         keep.position.y = 15; // Half height
-        keep.castShadow = true;
-        keep.receiveShadow = true;
+        keep.castShadow = this.enableShadows;
+        keep.receiveShadow = this.enableShadows;
         this.group.add(keep);
 
         // Towers at corners
@@ -36,8 +37,8 @@ export class Castle {
         towerPositions.forEach(pos => {
             const tower = new THREE.Mesh(towerGeo, stoneMaterial);
             tower.position.set(pos.x, 12.5, pos.z);
-            tower.castShadow = true;
-            tower.receiveShadow = true;
+            tower.castShadow = this.enableShadows;
+            tower.receiveShadow = this.enableShadows;
             this.group.add(tower);
         });
 
@@ -54,8 +55,8 @@ export class Castle {
             const wall = new THREE.Mesh(wallGeo, stoneMaterial);
             wall.position.set(pos.x, 7.5, pos.z);
             wall.rotation.y = pos.rot;
-            wall.castShadow = true;
-            wall.receiveShadow = true;
+            wall.castShadow = false;
+            wall.receiveShadow = this.enableShadows;
             this.group.add(wall);
         });
 

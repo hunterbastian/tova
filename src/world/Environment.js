@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
 export class Environment {
-    constructor(scene) {
+    constructor(scene, options = {}) {
         this.scene = scene;
+        this.enableShadows = options.enableShadows ?? true;
         this.init();
     }
 
@@ -27,25 +28,27 @@ export class Environment {
 
         const dirLight = new THREE.DirectionalLight(0xffdfba, 1.5); // Warm sunlight
         dirLight.position.set(100, 100, 50);
-        dirLight.castShadow = true;
+        dirLight.castShadow = this.enableShadows;
 
         // Shadow properties tuned for a balance of quality and performance.
         // On many Macs, a 1024x1024 shadow map is a good compromise between
         // visual quality and framerate.
-        dirLight.shadow.mapSize.width = 1024;
-        dirLight.shadow.mapSize.height = 1024;
-        dirLight.shadow.camera.near = 0.5;
-        dirLight.shadow.camera.far = 350;
+        if (this.enableShadows) {
+            dirLight.shadow.mapSize.width = 512;
+            dirLight.shadow.mapSize.height = 512;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 350;
 
-        const d = 160;
-        dirLight.shadow.camera.left = -d;
-        dirLight.shadow.camera.right = d;
-        dirLight.shadow.camera.top = d;
-        dirLight.shadow.camera.bottom = -d;
+            const d = 160;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
 
-        // Soft shadows
-        dirLight.shadow.radius = 4;
-        dirLight.shadow.bias = -0.0005;
+            // Soft shadows
+            dirLight.shadow.radius = 3;
+            dirLight.shadow.bias = -0.0005;
+        }
 
         this.scene.add(dirLight);
     }

@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 
 export class Town {
-    constructor(scene, terrain) {
+    constructor(scene, terrain, options = {}) {
         this.scene = scene;
         this.terrain = terrain;
         this.group = new THREE.Group();
+        this.enableShadows = options.enableShadows ?? true;
         this.init();
     }
 
@@ -28,32 +29,40 @@ export class Town {
         // Generate houses in the "flat" area defined in Terrain.js
         // x: 20 to 100, z: -50 to 50
 
-        for (let i = 0; i < 20; i++) {
+        const count = 20;
+        const baseMesh = new THREE.InstancedMesh(houseGeo, houseMaterial, count);
+        const roofMesh = new THREE.InstancedMesh(roofGeo, roofMaterial, count);
+        baseMesh.castShadow = false;
+        roofMesh.castShadow = false;
+        baseMesh.receiveShadow = this.enableShadows;
+        roofMesh.receiveShadow = this.enableShadows;
+
+        const dummy = new THREE.Object3D();
+
+        for (let i = 0; i < count; i++) {
             const x = 30 + Math.random() * 60;
             const z = -40 + Math.random() * 80;
 
             const y = this.terrain.getHeightAt(x, z);
 
-            // Simple House Group
-            const houseGroup = new THREE.Group();
+            const rotation = Math.random() * Math.PI * 2;
 
-            const base = new THREE.Mesh(houseGeo, houseMaterial);
-            base.position.y = 2;
-            base.castShadow = true;
-            base.receiveShadow = true;
-            houseGroup.add(base);
+            dummy.position.set(x, y + 2, z);
+            dummy.rotation.set(0, rotation, 0);
+            dummy.updateMatrix();
+            baseMesh.setMatrixAt(i, dummy.matrix);
 
-            const roof = new THREE.Mesh(roofGeo, roofMaterial);
-            roof.position.y = 4 + 1;
-            roof.rotation.y = Math.PI / 4;
-            roof.castShadow = true;
-            houseGroup.add(roof);
-
-            houseGroup.position.set(x, y, z);
-            houseGroup.rotation.y = Math.random() * Math.PI * 2;
-
-            this.group.add(houseGroup);
+            dummy.position.set(x, y + 5, z);
+            dummy.rotation.set(0, rotation + Math.PI / 4, 0);
+            dummy.updateMatrix();
+            roofMesh.setMatrixAt(i, dummy.matrix);
         }
+
+        baseMesh.instanceMatrix.needsUpdate = true;
+        roofMesh.instanceMatrix.needsUpdate = true;
+
+        this.group.add(baseMesh);
+        this.group.add(roofMesh);
 
         this.scene.add(this.group);
     }

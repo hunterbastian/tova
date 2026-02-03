@@ -10,17 +10,11 @@ export class Ocean {
     init() {
         const geometry = new THREE.PlaneGeometry(1000, 1000);
 
-        // Water material
-        const material = new THREE.MeshPhysicalMaterial({
-            color: 0x001e0f,
-            metalness: 0,
-            roughness: 0.1,
-            transmission: 0.9, // Glass-like
-            thickness: 1.5,
-            envMapIntensity: 1.0,
-            clearcoat: 1.0,
-            clearcoatRoughness: 0.1,
-            side: THREE.DoubleSide
+        // Cheaper water material for better performance.
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x0b2a24,
+            metalness: 0.0,
+            roughness: 0.5
         });
 
         this.mesh = new THREE.Mesh(geometry, material);

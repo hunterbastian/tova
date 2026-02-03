@@ -1,21 +1,21 @@
 import * as THREE from 'three';
 
 export class Terrain {
-    constructor(scene) {
+    constructor(scene, options = {}) {
         this.scene = scene;
         this.mesh = null;
-
-        // Reuse a single raycaster and vectors for height queries (avoids per-frame allocations).
-        this.raycaster = new THREE.Raycaster();
-        this.downVector = new THREE.Vector3(0, -1, 0);
-        this.rayOrigin = new THREE.Vector3();
+        this.enableShadows = options.enableShadows ?? true;
+        this.size = 500;
+        this.segments = 128;
+        this.step = this.size / this.segments;
+        this.positionArray = null;
 
         this.init();
     }
 
     init() {
         // Create a large plane for the terrain
-        const geometry = new THREE.PlaneGeometry(500, 500, 128, 128);
+        const geometry = new THREE.PlaneGeometry(this.size, this.size, this.segments, this.segments);
 
         // Manipulate vertices to create a hill and some roughness
         const positionAttribute = geometry.attributes.position;
@@ -63,26 +63,52 @@ export class Terrain {
             color: 0x3a5f0b,
             roughness: 0.9,
             metalness: 0.0,
-            flatShading: true,
-            side: THREE.DoubleSide
+            flatShading: true
         });
 
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.rotation.x = -Math.PI / 2;
-        this.mesh.receiveShadow = true;
-        this.mesh.castShadow = true;
+        this.mesh.receiveShadow = this.enableShadows;
+        this.mesh.castShadow = this.enableShadows;
 
         this.scene.add(this.mesh);
+
+        this.positionArray = geometry.attributes.position.array;
     }
 
     getHeightAt(x, z) {
-        // Reuse a single raycaster to keep per-frame allocations low.
-        this.rayOrigin.set(x, 100, z);
-        this.raycaster.set(this.rayOrigin, this.downVector);
-        const intersects = this.raycaster.intersectObject(this.mesh, false);
-        if (intersects.length > 0) {
-            return intersects[0].point.y;
+        const half = this.size / 2;
+        const localX = x + half;
+        const localZ = z + half;
+
+        if (localX < 0 || localZ < 0 || localX > this.size || localZ > this.size) {
+            return 0;
         }
-        return 0;
+
+        const gridX = localX / this.step;
+        const gridZ = localZ / this.step;
+        const ix = Math.floor(gridX);
+        const iz = Math.floor(gridZ);
+        const fx = gridX - ix;
+        const fz = gridZ - iz;
+
+        const vertsPerRow = this.segments + 1;
+        const ix1 = Math.min(ix + 1, this.segments);
+        const iz1 = Math.min(iz + 1, this.segments);
+
+        const i00 = ix + vertsPerRow * iz;
+        const i10 = ix1 + vertsPerRow * iz;
+        const i01 = ix + vertsPerRow * iz1;
+        const i11 = ix1 + vertsPerRow * iz1;
+
+        const z00 = this.positionArray[i00 * 3 + 2];
+        const z10 = this.positionArray[i10 * 3 + 2];
+        const z01 = this.positionArray[i01 * 3 + 2];
+        const z11 = this.positionArray[i11 * 3 + 2];
+
+        const z0 = z00 * (1 - fx) + z10 * fx;
+        const z1 = z01 * (1 - fx) + z11 * fx;
+
+        return z0 * (1 - fz) + z1 * fz;
     }
 }
