@@ -18,6 +18,7 @@ Original prompt: Propose AND implement one high-leverage viral feature for my ap
 - Added icon-based UI: day/night bar now has sun/moon icon and top-right HUD with move/look/chat icons (src/main.js).
 - Re-enabled mountains and boosted scale/visibility settings in src/main.js.
 - Made day/night bar minimal (icon + thin line) and added FPS + coords HUD top-left (src/main.js).
+- Implemented cinematic UI pass: vignette + grain overlays (toggle via ?vignette=0 or ?grain=0), icon-only right HUD, slimmer day/night bar, slower HUD update cadence (src/main.js).
 
 - Overhauled Town geometry into a European fantasy village: mixed house styles, cobble plaza + well, market stalls, roads, tavern sign, and lantern posts in src/structures/Town.js.
 

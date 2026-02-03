@@ -9,15 +9,15 @@ export class Environment {
         this.cycleLength = this.dayLength + this.nightLength;
 
         this.colors = {
-            skyDay: new THREE.Color(0x87ceeb),
+            skyDay: new THREE.Color(0x7db4ff),
             skyNight: new THREE.Color(0x0b1b2e),
-            fogDay: new THREE.Color(0xc3d7ef),
+            fogDay: new THREE.Color(0xb8d1f5),
             fogNight: new THREE.Color(0x0a1424),
-            sunDay: new THREE.Color(0xfff1d0),
+            sunDay: new THREE.Color(0xffe2b0),
             sunNight: new THREE.Color(0x4a5a86),
-            skyGolden: new THREE.Color(0xf7b46a),
-            fogGolden: new THREE.Color(0xf2b178),
-            sunGolden: new THREE.Color(0xffb15e)
+            skyGolden: new THREE.Color(0xf3b06b),
+            fogGolden: new THREE.Color(0xf1b780),
+            sunGolden: new THREE.Color(0xffb66d)
         };
 
         this._sunColor = new THREE.Color();
@@ -32,6 +32,7 @@ export class Environment {
         this.ambientLight = null;
         this.hemiLight = null;
         this.sunLight = null;
+        this.bounceLight = null;
         this.overrideMode = null;
         this.init();
     }
@@ -41,7 +42,7 @@ export class Environment {
         this.scene.background = this.colors.skyDay.clone();
 
         // Fog for depth and atmosphere
-        this.scene.fog = new THREE.FogExp2(this.colors.fogDay.clone(), 0.0015);
+        this.scene.fog = new THREE.FogExp2(this.colors.fogDay.clone(), 0.0011);
 
         // Lighting
         this.setupLights();
@@ -75,11 +76,17 @@ export class Environment {
             this.sunLight.shadow.camera.bottom = -d;
 
             // Soft shadows
-            this.sunLight.shadow.radius = 3;
+            this.sunLight.shadow.radius = 4;
             this.sunLight.shadow.bias = -0.0005;
         }
 
         this.scene.add(this.sunLight);
+
+        // Soft cool fill to keep shadows readable (Sildur-like light wrap).
+        this.bounceLight = new THREE.DirectionalLight(0xb7c7ff, 0.35);
+        this.bounceLight.position.set(-80, 60, -60);
+        this.bounceLight.castShadow = false;
+        this.scene.add(this.bounceLight);
     }
 
     setOverrideMode(mode) {
@@ -130,6 +137,13 @@ export class Environment {
         );
         this.sunLight.target.position.set(playerPosition.x, playerPosition.y, playerPosition.z);
         this.sunLight.target.updateMatrixWorld();
+        if (this.bounceLight) {
+            this.bounceLight.position.set(
+                playerPosition.x - sunX * 0.6,
+                playerPosition.y + sunY * 0.35,
+                playerPosition.z - sunX * 0.4
+            );
+        }
 
         const goldenRamp = THREE.MathUtils.smoothstep(sunElevation, -0.15, 0.45);
         const goldenPeak = goldenRamp * (1 - THREE.MathUtils.smoothstep(sunElevation, 0.45, 0.9));
@@ -140,7 +154,7 @@ export class Environment {
             .lerp(this.colors.sunDay, smoothDaylight)
             .lerp(this.colors.sunGolden, goldenBlend);
         this.sunLight.color.copy(sunColor);
-        this.sunLight.intensity = 0.2 + smoothDaylight * 1.25;
+        this.sunLight.intensity = 0.28 + smoothDaylight * 1.4;
 
         const skyColor = this._skyColor
             .copy(this.colors.skyNight)
@@ -155,12 +169,15 @@ export class Environment {
             this.scene.fog.color.copy(fogColor);
         }
 
-        this.ambientLight.intensity = 0.28 + smoothDaylight * 0.32;
-        this.hemiLight.intensity = 0.32 + smoothDaylight * 0.4;
+        this.ambientLight.intensity = 0.24 + smoothDaylight * 0.26;
+        this.hemiLight.intensity = 0.35 + smoothDaylight * 0.45;
         this.hemiLight.color.copy(this._hemiColor.copy(skyColor).lerp(this._white, 0.35));
         this.hemiLight.groundColor.copy(
             this._groundColor.copy(this._groundNight).lerp(this._groundDay, smoothDaylight)
         );
+        if (this.bounceLight) {
+            this.bounceLight.intensity = 0.18 + smoothDaylight * 0.28;
+        }
 
         return {
             daylight: smoothDaylight,

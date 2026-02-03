@@ -16,6 +16,8 @@ const parseNumber = (value, fallback) => {
 const params = new URLSearchParams(window.location.search);
 const bloomParam = params.get('bloom');
 const shadowsParam = params.get('shadows');
+const grainParam = params.get('grain');
+const vignetteParam = params.get('vignette');
 const perf = {
     // Default to "pretty" unless explicitly turned off by query params.
     maxPixelRatio: Math.min(2, Math.max(0.75, parseNumber(params.get('pixelRatio'), 1.5))),
@@ -38,23 +40,107 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = perf.enableShadows;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.8; // Slightly darker for mood
+renderer.toneMappingExposure = 0.9; // Brighter, Sildur-like daylight
 document.body.appendChild(renderer.domElement);
+
+const crosshair = document.createElement('div');
+crosshair.style.position = 'fixed';
+crosshair.style.left = '50%';
+crosshair.style.top = '50%';
+crosshair.style.transform = 'translate(-50%, -50%)';
+crosshair.style.width = '14px';
+crosshair.style.height = '14px';
+crosshair.style.pointerEvents = 'none';
+crosshair.style.zIndex = '2';
+crosshair.style.opacity = '0.6';
+
+const crosshairVertical = document.createElement('div');
+crosshairVertical.style.position = 'absolute';
+crosshairVertical.style.left = '50%';
+crosshairVertical.style.top = '0';
+crosshairVertical.style.width = '1px';
+crosshairVertical.style.height = '14px';
+crosshairVertical.style.background = 'rgba(240, 243, 255, 0.7)';
+crosshairVertical.style.transform = 'translateX(-50%)';
+
+const crosshairHorizontal = document.createElement('div');
+crosshairHorizontal.style.position = 'absolute';
+crosshairHorizontal.style.left = '0';
+crosshairHorizontal.style.top = '50%';
+crosshairHorizontal.style.width = '14px';
+crosshairHorizontal.style.height = '1px';
+crosshairHorizontal.style.background = 'rgba(240, 243, 255, 0.7)';
+crosshairHorizontal.style.transform = 'translateY(-50%)';
+
+crosshair.appendChild(crosshairVertical);
+crosshair.appendChild(crosshairHorizontal);
+document.body.appendChild(crosshair);
+
+const uiLayer = document.createElement('div');
+uiLayer.style.position = 'fixed';
+uiLayer.style.inset = '0';
+uiLayer.style.pointerEvents = 'none';
+uiLayer.style.zIndex = '1';
+document.body.appendChild(uiLayer);
+
+const vignetteEnabled = vignetteParam !== '0';
+if (vignetteEnabled) {
+    const vignette = document.createElement('div');
+    vignette.style.position = 'absolute';
+    vignette.style.inset = '0';
+    vignette.style.background = 'radial-gradient(circle at 50% 45%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.18) 65%, rgba(0,0,0,0.45) 100%)';
+    vignette.style.mixBlendMode = 'multiply';
+    vignette.style.opacity = '0.6';
+    uiLayer.appendChild(vignette);
+}
+
+const grainEnabled = grainParam !== '0';
+if (grainEnabled) {
+    const grainCanvas = document.createElement('canvas');
+    grainCanvas.width = 128;
+    grainCanvas.height = 128;
+    grainCanvas.style.position = 'absolute';
+    grainCanvas.style.inset = '0';
+    grainCanvas.style.width = '100%';
+    grainCanvas.style.height = '100%';
+    grainCanvas.style.opacity = '0.06';
+    grainCanvas.style.imageRendering = 'pixelated';
+    grainCanvas.style.mixBlendMode = 'soft-light';
+    uiLayer.appendChild(grainCanvas);
+
+    const grainCtx = grainCanvas.getContext('2d');
+    const grainImage = grainCtx.createImageData(grainCanvas.width, grainCanvas.height);
+    const grainData = grainImage.data;
+
+    const updateGrain = () => {
+        for (let i = 0; i < grainData.length; i += 4) {
+            const value = Math.random() * 255;
+            grainData[i] = value;
+            grainData[i + 1] = value;
+            grainData[i + 2] = value;
+            grainData[i + 3] = 18;
+        }
+        grainCtx.putImageData(grainImage, 0, 0);
+    };
+
+    updateGrain();
+    setInterval(updateGrain, 200);
+}
 
 const timeBar = document.createElement('div');
 timeBar.style.position = 'absolute';
 timeBar.style.top = '16px';
 timeBar.style.left = '50%';
 timeBar.style.transform = 'translateX(-50%)';
-timeBar.style.width = '200px';
+timeBar.style.width = '170px';
 timeBar.style.padding = '4px 6px';
-timeBar.style.borderRadius = '8px';
-timeBar.style.background = 'rgba(6, 10, 18, 0.2)';
-timeBar.style.backdropFilter = 'blur(6px)';
+timeBar.style.borderRadius = '6px';
+timeBar.style.background = 'rgba(6, 10, 18, 0.16)';
+timeBar.style.backdropFilter = 'blur(4px)';
 timeBar.style.fontFamily = 'serif';
 timeBar.style.color = '#f0f3ff';
 timeBar.style.fontSize = '10px';
-timeBar.style.letterSpacing = '0.12em';
+timeBar.style.letterSpacing = '0.14em';
 timeBar.style.textTransform = 'uppercase';
 timeBar.style.textAlign = 'center';
 timeBar.style.pointerEvents = 'none';
@@ -77,9 +163,9 @@ timeBarLabel.appendChild(timeIcon);
 
 const timeBarTrack = document.createElement('div');
 timeBarTrack.style.marginTop = '2px';
-timeBarTrack.style.height = '3px';
+timeBarTrack.style.height = '2px';
 timeBarTrack.style.borderRadius = '999px';
-timeBarTrack.style.background = 'rgba(255, 255, 255, 0.15)';
+timeBarTrack.style.background = 'rgba(255, 255, 255, 0.12)';
 timeBarTrack.style.overflow = 'hidden';
 
 const timeBarFill = document.createElement('div');
@@ -127,59 +213,54 @@ hud.style.position = 'absolute';
 hud.style.top = '16px';
 hud.style.right = '16px';
 hud.style.display = 'flex';
-hud.style.gap = '10px';
-hud.style.padding = '8px 10px';
-hud.style.borderRadius = '14px';
-hud.style.background = 'rgba(6, 10, 18, 0.45)';
-hud.style.backdropFilter = 'blur(6px)';
+hud.style.gap = '8px';
+hud.style.padding = '6px 8px';
+hud.style.borderRadius = '10px';
+hud.style.background = 'rgba(6, 10, 18, 0.16)';
+hud.style.backdropFilter = 'blur(4px)';
 hud.style.fontFamily = 'serif';
 hud.style.color = '#f0f3ff';
-hud.style.fontSize = '12px';
-hud.style.letterSpacing = '0.05em';
+hud.style.fontSize = '11px';
+hud.style.letterSpacing = '0.04em';
 hud.style.textTransform = 'uppercase';
 hud.style.pointerEvents = 'none';
 hud.style.zIndex = '2';
 
-const makeHudItem = (iconSvg, label) => {
+const makeHudItem = (iconSvg) => {
     const item = document.createElement('div');
     item.style.display = 'flex';
     item.style.alignItems = 'center';
-    item.style.gap = '6px';
 
     const icon = document.createElement('span');
     icon.style.display = 'inline-flex';
-    icon.style.width = '14px';
-    icon.style.height = '14px';
+    icon.style.width = '12px';
+    icon.style.height = '12px';
     icon.innerHTML = iconSvg;
 
-    const text = document.createElement('span');
-    text.textContent = label;
-
     item.appendChild(icon);
-    item.appendChild(text);
     return item;
 };
 
 const iconKeyboard = `
-<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#f0f3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#f0f3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
   <rect x="3" y="6" width="18" height="12" rx="2"></rect>
   <path d="M7 10h1M10 10h1M13 10h1M16 10h1M7 13h3M11 13h3M15 13h2"></path>
 </svg>`;
 
 const iconMouse = `
-<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#f0f3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#f0f3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
   <rect x="8" y="3" width="8" height="18" rx="4"></rect>
   <path d="M12 7v3"></path>
 </svg>`;
 
 const iconSlash = `
-<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#f0f3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#f0f3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
   <path d="M7 20L17 4"></path>
 </svg>`;
 
-hud.appendChild(makeHudItem(iconKeyboard, 'Move'));
-hud.appendChild(makeHudItem(iconMouse, 'Look'));
-hud.appendChild(makeHudItem(iconSlash, 'Chat'));
+hud.appendChild(makeHudItem(iconKeyboard));
+hud.appendChild(makeHudItem(iconMouse));
+hud.appendChild(makeHudItem(iconSlash));
 document.body.appendChild(hud);
 
 const sunSvg = `
@@ -203,7 +284,7 @@ setTimeIcon(true);
 const environment = new Environment(scene, { enableShadows: perf.enableShadows, dayLength: 120, nightLength: 120 });
 const terrain = new Terrain(scene, { enableShadows: perf.enableShadows });
 const ocean = new Ocean(scene);
-const mountains = new Mountains(scene, { radius: 420, height: 210, layers: 4, haze: 0.12, baseLift: 10 });
+const mountains = new Mountains(scene, { radius: 420, height: 210, layers: 4, haze: 0.08, baseLift: 12 });
 const forest = new Forest(scene, terrain, { enableShadows: perf.enableShadows });
 
 const castle = new Castle(scene, terrain, { enableShadows: perf.enableShadows });
@@ -312,7 +393,7 @@ function animate() {
     }
     mountains.update(player.playerObject.position);
 
-    if (uiTimer >= 0.1) {
+    if (uiTimer >= 0.5) {
         uiTimer = 0;
         const pos = player.playerObject.position;
         coordsLabel.textContent = `X ${pos.x.toFixed(1)} Y ${pos.y.toFixed(1)} Z ${pos.z.toFixed(1)}`;

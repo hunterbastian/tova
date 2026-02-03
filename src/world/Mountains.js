@@ -74,8 +74,9 @@ export class Mountains {
                 Math.sin(t * Math.PI * 10 + rng() * 4) * 0.22 +
                 Math.sin(t * Math.PI * 22 + rng() * 6) * (0.12 + this.jaggedness * 0.18) +
                 (rng() - 0.5) * (0.22 + this.jaggedness * 0.2);
-            const jaggedBoost = 0.15 + this.jaggedness * 0.35;
-            const ridgeHeight = height * (0.58 + noise + Math.max(0, noise) * jaggedBoost);
+            const clampedNoise = clamp(noise, -0.35, 0.5);
+            const jaggedBoost = 0.08 + this.jaggedness * 0.22;
+            const ridgeHeight = height * (0.6 + clampedNoise + Math.max(0, clampedNoise) * jaggedBoost);
             const ridgeRadius = radius + (rng() - 0.5) * 12;
 
             const x = Math.cos(angle) * ridgeRadius;
@@ -140,7 +141,8 @@ export class Mountains {
             metalness: 0.0,
             flatShading: true,
             transparent: opacity < 1,
-            opacity
+            opacity,
+            side: THREE.DoubleSide
         });
 
         const mesh = new THREE.Mesh(geometry, material);

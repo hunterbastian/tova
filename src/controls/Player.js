@@ -21,10 +21,13 @@ export class Player {
         this.moveDown = false;
         this.isFlying = false;
 
-        this.walkSpeed = 30;
+        this.walkSpeed = 20;
         this.flySpeed = 40;
         this.eyeHeight = 3;
         this.groundSnapSpeed = 10; // higher = quicker snapping to terrain
+        this.walkSwayTime = 0;
+        this.walkSwayAmount = 0.006;
+        this.walkSwaySpeed = 3.5;
 
         // Simple chat UI for commands like `fly` / `walk`
         this.chatOpen = false;
@@ -216,6 +219,12 @@ export class Player {
     }
 
     update(delta) {
+        const isMoving =
+            this.moveForward ||
+            this.moveBackward ||
+            this.moveLeft ||
+            this.moveRight;
+
         if (this.controls.isLocked === true) {
             const forward = Number(this.moveForward) - Number(this.moveBackward);
             const strafe = Number(this.moveRight) - Number(this.moveLeft);
@@ -240,6 +249,15 @@ export class Player {
 
         if (!this.isFlying) {
             this.alignToTerrain(delta);
+        }
+
+        if (!this.isFlying && isMoving) {
+            this.walkSwayTime += delta * this.walkSwaySpeed;
+            const sway = Math.sin(this.walkSwayTime) * this.walkSwayAmount;
+            this.camera.rotation.z = sway;
+        } else {
+            this.walkSwayTime = 0;
+            this.camera.rotation.z *= 0.85;
         }
     }
 
