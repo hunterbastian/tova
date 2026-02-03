@@ -33,6 +33,7 @@ export class Environment {
         this.hemiLight = null;
         this.sunLight = null;
         this.bounceLight = null;
+        this.groundFill = null;
         this.overrideMode = null;
         this.init();
     }
@@ -87,6 +88,13 @@ export class Environment {
         this.bounceLight.position.set(-80, 60, -60);
         this.bounceLight.castShadow = false;
         this.scene.add(this.bounceLight);
+
+        // Terrain-only warm fill to lift ground brightness without washing the sky.
+        this.groundFill = new THREE.DirectionalLight(0xf2d2a8, 0.45);
+        this.groundFill.position.set(60, 30, 120);
+        this.groundFill.castShadow = false;
+        this.groundFill.layers.enable(1);
+        this.scene.add(this.groundFill);
     }
 
     setOverrideMode(mode) {
@@ -144,6 +152,13 @@ export class Environment {
                 playerPosition.z - sunX * 0.4
             );
         }
+        if (this.groundFill) {
+            this.groundFill.position.set(
+                playerPosition.x + sunX * 0.35,
+                playerPosition.y + 35,
+                playerPosition.z + sunX * 0.2
+            );
+        }
 
         const goldenRamp = THREE.MathUtils.smoothstep(sunElevation, -0.15, 0.45);
         const goldenPeak = goldenRamp * (1 - THREE.MathUtils.smoothstep(sunElevation, 0.45, 0.9));
@@ -177,6 +192,9 @@ export class Environment {
         );
         if (this.bounceLight) {
             this.bounceLight.intensity = 0.24 + smoothDaylight * 0.34;
+        }
+        if (this.groundFill) {
+            this.groundFill.intensity = 0.18 + smoothDaylight * 0.55;
         }
 
         return {

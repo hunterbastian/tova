@@ -7,6 +7,7 @@ import { Forest } from './world/Forest.js';
 import { Castle } from './structures/Castle.js';
 import { Town } from './structures/Town.js';
 import { Player } from './controls/Player.js';
+import ambientTrackUrl from './assets/fantasy-medieval-ambient.mp3';
 
 const parseNumber = (value, fallback) => {
     const parsed = Number(value);
@@ -31,6 +32,7 @@ const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(0, 20, 50); // Higher starting position to see the terrain
+camera.layers.enable(1);
 
 // Lower default quality for smoother performance on typical Macs.
 // Antialiasing is disabled and pixel ratio is capped unless overridden by URL params.
@@ -82,6 +84,140 @@ uiLayer.style.inset = '0';
 uiLayer.style.pointerEvents = 'none';
 uiLayer.style.zIndex = '1';
 document.body.appendChild(uiLayer);
+
+const ambientToggle = document.createElement('button');
+ambientToggle.type = 'button';
+ambientToggle.textContent = 'Music On';
+ambientToggle.style.position = 'fixed';
+ambientToggle.style.right = '16px';
+ambientToggle.style.bottom = '16px';
+ambientToggle.style.padding = '6px 10px';
+ambientToggle.style.borderRadius = '8px';
+ambientToggle.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+ambientToggle.style.background = 'rgba(6, 10, 18, 0.45)';
+ambientToggle.style.color = '#f0f3ff';
+ambientToggle.style.fontFamily = 'serif';
+ambientToggle.style.fontSize = '11px';
+ambientToggle.style.letterSpacing = '0.12em';
+ambientToggle.style.textTransform = 'uppercase';
+ambientToggle.style.cursor = 'pointer';
+ambientToggle.style.pointerEvents = 'auto';
+ambientToggle.style.zIndex = '3';
+document.body.appendChild(ambientToggle);
+
+const createAmbientMusic = () => {
+    const state = {
+        context: null,
+        master: null,
+        enabled: true,
+        started: false,
+        buffer: null,
+        source: null,
+        loading: false
+    };
+
+    const createImpulse = (context, duration = 2.6, decay = 3.2) => {
+        const rate = context.sampleRate;
+        const length = Math.floor(rate * duration);
+        const impulse = context.createBuffer(2, length, rate);
+        for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
+            const data = impulse.getChannelData(channel);
+            for (let i = 0; i < length; i += 1) {
+                const t = i / length;
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+            }
+        }
+        return impulse;
+    };
+
+    const loadBuffer = async (context) => {
+        if (state.buffer || state.loading) return;
+        state.loading = true;
+        const response = await fetch(ambientTrackUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        state.buffer = await context.decodeAudioData(arrayBuffer);
+        state.loading = false;
+    };
+
+    const start = async () => {
+        if (state.started) return;
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+
+        const context = new AudioCtx();
+        const master = context.createGain();
+        master.gain.value = 0;
+        master.connect(context.destination);
+
+        const filter = context.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 1200;
+        filter.Q.value = 0.7;
+
+        const convolver = context.createConvolver();
+        convolver.buffer = createImpulse(context);
+
+        const wet = context.createGain();
+        wet.gain.value = 0.55;
+        const dry = context.createGain();
+        dry.gain.value = 0.75;
+
+        filter.connect(dry);
+        filter.connect(convolver);
+        convolver.connect(wet);
+        wet.connect(master);
+        dry.connect(master);
+
+        await loadBuffer(context);
+        if (!state.buffer) return;
+
+        const source = context.createBufferSource();
+        source.buffer = state.buffer;
+        source.loop = true;
+        source.playbackRate.value = 0.92;
+        source.connect(filter);
+        source.start();
+
+        state.context = context;
+        state.master = master;
+        state.source = source;
+        state.started = true;
+
+        if (state.enabled) {
+            master.gain.linearRampToValueAtTime(0.08, context.currentTime + 2.5);
+        }
+    };
+
+    const setEnabled = (enabled) => {
+        state.enabled = enabled;
+        if (!state.started || !state.master || !state.context) return;
+        const now = state.context.currentTime;
+        state.master.gain.cancelScheduledValues(now);
+        state.master.gain.setValueAtTime(state.master.gain.value, now);
+        state.master.gain.linearRampToValueAtTime(enabled ? 0.08 : 0.0, now + 1.2);
+    };
+
+    return { start, setEnabled, state };
+};
+
+const ambientMusic = createAmbientMusic();
+
+const updateAmbientLabel = () => {
+    ambientToggle.textContent = ambientMusic.state.enabled ? 'Music On' : 'Music Off';
+};
+
+ambientToggle.addEventListener('click', () => {
+    ambientMusic.state.enabled = !ambientMusic.state.enabled;
+    ambientMusic.setEnabled(ambientMusic.state.enabled);
+    updateAmbientLabel();
+});
+
+document.addEventListener('pointerdown', () => {
+    ambientMusic.start();
+    if (ambientMusic.state.context && ambientMusic.state.context.state === 'suspended') {
+        ambientMusic.state.context.resume();
+    }
+}, { once: true });
 
 const vignetteEnabled = vignetteParam !== '0';
 if (vignetteEnabled) {
@@ -297,14 +433,48 @@ if (perf.enableShadows) {
 
 let composer = null;
 let bloomPass = null;
+let colorGradePass = null;
 let renderFrame = () => renderer.render(scene, camera);
 
+const createSunGlowTexture = () => {
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.35, 'rgba(255, 220, 170, 0.7)');
+    gradient.addColorStop(0.7, 'rgba(255, 190, 120, 0.25)');
+    gradient.addColorStop(1, 'rgba(255, 190, 120, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    return texture;
+};
+
+const sunGlow = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+        map: createSunGlowTexture(),
+        color: 0xfff0d4,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    })
+);
+sunGlow.scale.set(38, 38, 1);
+sunGlow.renderOrder = 2;
+scene.add(sunGlow);
+
 const initPostprocessing = async () => {
-    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }, { ShaderPass }] = await Promise.all([
         import('three/examples/jsm/postprocessing/EffectComposer.js'),
         import('three/examples/jsm/postprocessing/RenderPass.js'),
         import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
-        import('three/examples/jsm/postprocessing/OutputPass.js')
+        import('three/examples/jsm/postprocessing/OutputPass.js'),
+        import('three/examples/jsm/postprocessing/ShaderPass.js')
     ]);
 
     composer = new EffectComposer(renderer);
@@ -314,15 +484,49 @@ const initPostprocessing = async () => {
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
 
-    const bloomSize = new THREE.Vector2(
-        window.innerWidth * perf.bloomResolutionScale,
-        window.innerHeight * perf.bloomResolutionScale
-    );
-    bloomPass = new UnrealBloomPass(bloomSize, 1.2, 0.4, 0.85);
-    bloomPass.threshold = 0.3;
-    bloomPass.strength = 0.35;
-    bloomPass.radius = 0.4;
-    composer.addPass(bloomPass);
+    colorGradePass = new ShaderPass({
+        uniforms: {
+            tDiffuse: { value: null },
+            lift: { value: new THREE.Vector3(0.005, 0.008, 0.015) },
+            gamma: { value: new THREE.Vector3(0.99, 0.99, 1.0) },
+            gain: { value: new THREE.Vector3(1.03, 1.02, 1.01) }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D tDiffuse;
+            uniform vec3 lift;
+            uniform vec3 gamma;
+            uniform vec3 gain;
+            varying vec2 vUv;
+            void main() {
+                vec4 color = texture2D(tDiffuse, vUv);
+                vec3 graded = color.rgb + lift;
+                graded = max(graded, vec3(0.0));
+                graded = pow(graded, gamma);
+                graded *= gain;
+                gl_FragColor = vec4(graded, color.a);
+            }
+        `
+    });
+    composer.addPass(colorGradePass);
+
+    if (perf.enableBloom) {
+        const bloomSize = new THREE.Vector2(
+            window.innerWidth * perf.bloomResolutionScale,
+            window.innerHeight * perf.bloomResolutionScale
+        );
+        bloomPass = new UnrealBloomPass(bloomSize, 1.2, 0.4, 0.85);
+        bloomPass.threshold = 0.3;
+        bloomPass.strength = 0.35;
+        bloomPass.radius = 0.4;
+        composer.addPass(bloomPass);
+    }
 
     const outputPass = new OutputPass();
     composer.addPass(outputPass);
@@ -330,9 +534,7 @@ const initPostprocessing = async () => {
     renderFrame = () => composer.render();
 };
 
-if (perf.enableBloom) {
-    initPostprocessing();
-}
+initPostprocessing();
 
 // Resize Handler
 window.addEventListener('resize', () => {
@@ -402,11 +604,17 @@ function animate() {
             const cycleLength = cycle.isDay ? environment.dayLength : environment.nightLength;
             const progress = cycleLength === 0 ? 0 : (cycleLength - cycle.timeToNext) / cycleLength;
             timeBarFill.style.width = `${Math.max(0, Math.min(1, progress)) * 100}%`;
-            timeBarFill.style.background = cycle.isDay
-                ? 'linear-gradient(90deg, #f7b46a, #fff1d0)'
-                : 'linear-gradient(90deg, #2a3f6e, #a0b6ff)';
-            setTimeIcon(cycle.isDay);
+        timeBarFill.style.background = cycle.isDay
+            ? 'linear-gradient(90deg, #f7b46a, #fff1d0)'
+            : 'linear-gradient(90deg, #2a3f6e, #a0b6ff)';
+        setTimeIcon(cycle.isDay);
+
+        if (environment.sunLight) {
+            sunGlow.position.copy(environment.sunLight.position);
+            const glowStrength = 0.15 + cycle.daylight * 0.85;
+            sunGlow.material.opacity = glowStrength;
         }
+    }
     }
 
     // Simple camera rotation for overview

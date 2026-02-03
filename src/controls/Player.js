@@ -26,8 +26,10 @@ export class Player {
         this.eyeHeight = 3;
         this.groundSnapSpeed = 10; // higher = quicker snapping to terrain
         this.walkSwayTime = 0;
-        this.walkSwayAmount = 0.0035;
-        this.walkSwaySpeed = 2.2;
+        this.walkSwayAmount = 0.0;
+        this.walkSwaySpeed = 0.0;
+        this._euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        this._forward = new THREE.Vector3();
 
         // Simple chat UI for commands like `fly` / `walk`
         this.chatOpen = false;
@@ -252,16 +254,17 @@ export class Player {
         }
 
         const maxPitch = Math.PI / 2 - 0.05;
-        this.camera.rotation.x = Math.max(-maxPitch, Math.min(maxPitch, this.camera.rotation.x));
-
-        if (!this.isFlying && isMoving) {
-            this.walkSwayTime += delta * this.walkSwaySpeed;
-            const sway = Math.sin(this.walkSwayTime) * this.walkSwayAmount;
-            this.camera.rotation.z = sway;
-        } else {
-            this.walkSwayTime = 0;
-            this.camera.rotation.z *= 0.85;
-        }
+        this.camera.getWorldDirection(this._forward);
+        const yaw = Math.atan2(this._forward.x, this._forward.z);
+        const pitch = Math.asin(THREE.MathUtils.clamp(this._forward.y, -1, 1));
+        this._euler.set(
+            Math.max(-maxPitch, Math.min(maxPitch, pitch)),
+            yaw,
+            0
+        );
+        this.camera.quaternion.setFromEuler(this._euler);
+        // Keep Minecraft-like POV: no roll/tilt.
+        this.playerObject.rotation.z = 0;
     }
 
     alignToTerrain(delta) {
