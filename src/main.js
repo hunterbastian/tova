@@ -14,11 +14,27 @@ const parseNumber = (value, fallback) => {
     return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const readFiniteParam = (paramsRef, key) => {
+    const raw = paramsRef.get(key);
+    if (raw === null) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
 const params = new URLSearchParams(window.location.search);
 const bloomParam = params.get('bloom');
 const shadowsParam = params.get('shadows');
 const grainParam = params.get('grain');
 const vignetteParam = params.get('vignette');
+const sharedMomentState = {
+    isShared: params.get('shared') === '1',
+    x: readFiniteParam(params, 'px'),
+    y: readFiniteParam(params, 'py'),
+    z: readFiniteParam(params, 'pz'),
+    yaw: readFiniteParam(params, 'yaw'),
+    pitch: readFiniteParam(params, 'pitch'),
+    tod: params.get('tod')
+};
 const perf = {
     // Default to "pretty" unless explicitly turned off by query params.
     maxPixelRatio: Math.min(2, Math.max(0.75, parseNumber(params.get('pixelRatio'), 1.5))),
@@ -85,6 +101,67 @@ uiLayer.style.pointerEvents = 'none';
 uiLayer.style.zIndex = '1';
 document.body.appendChild(uiLayer);
 
+const trackEvent = (name, properties = {}) => {
+    const payload = { name, properties, ts: Date.now() };
+    try {
+        if (typeof window.gtag === 'function') {
+            window.gtag('event', name, properties);
+        }
+    } catch (error) {
+        console.debug('Analytics gtag error', error);
+    }
+    try {
+        if (typeof window.plausible === 'function') {
+            window.plausible(name, { props: properties });
+        }
+    } catch (error) {
+        console.debug('Analytics plausible error', error);
+    }
+    try {
+        if (Array.isArray(window.dataLayer)) {
+            window.dataLayer.push({ event: name, ...properties });
+        }
+    } catch (error) {
+        console.debug('Analytics dataLayer error', error);
+    }
+    window.dispatchEvent(new CustomEvent('tova:analytics', { detail: payload }));
+};
+
+const toast = document.createElement('div');
+toast.style.position = 'fixed';
+toast.style.left = '50%';
+toast.style.bottom = '18px';
+toast.style.transform = 'translateX(-50%) translateY(8px)';
+toast.style.padding = '8px 12px';
+toast.style.borderRadius = '10px';
+toast.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+toast.style.background = 'rgba(6, 10, 18, 0.78)';
+toast.style.backdropFilter = 'blur(6px)';
+toast.style.color = '#f0f3ff';
+toast.style.fontFamily = 'serif';
+toast.style.fontSize = '11px';
+toast.style.letterSpacing = '0.08em';
+toast.style.textTransform = 'uppercase';
+toast.style.pointerEvents = 'none';
+toast.style.opacity = '0';
+toast.style.transition = 'opacity 180ms ease, transform 180ms ease';
+toast.style.zIndex = '4';
+document.body.appendChild(toast);
+
+let toastTimeoutId = null;
+const showToast = (message) => {
+    toast.textContent = message;
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+    if (toastTimeoutId) {
+        window.clearTimeout(toastTimeoutId);
+    }
+    toastTimeoutId = window.setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(-50%) translateY(8px)';
+    }, 1800);
+};
+
 const ambientToggle = document.createElement('button');
 ambientToggle.type = 'button';
 ambientToggle.textContent = 'Music On';
@@ -104,6 +181,26 @@ ambientToggle.style.cursor = 'pointer';
 ambientToggle.style.pointerEvents = 'auto';
 ambientToggle.style.zIndex = '3';
 document.body.appendChild(ambientToggle);
+
+const shareMomentButton = document.createElement('button');
+shareMomentButton.type = 'button';
+shareMomentButton.textContent = 'Share Moment';
+shareMomentButton.style.position = 'fixed';
+shareMomentButton.style.right = '16px';
+shareMomentButton.style.bottom = '52px';
+shareMomentButton.style.padding = '6px 10px';
+shareMomentButton.style.borderRadius = '8px';
+shareMomentButton.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+shareMomentButton.style.background = 'rgba(6, 10, 18, 0.45)';
+shareMomentButton.style.color = '#f0f3ff';
+shareMomentButton.style.fontFamily = 'serif';
+shareMomentButton.style.fontSize = '11px';
+shareMomentButton.style.letterSpacing = '0.12em';
+shareMomentButton.style.textTransform = 'uppercase';
+shareMomentButton.style.cursor = 'pointer';
+shareMomentButton.style.pointerEvents = 'auto';
+shareMomentButton.style.zIndex = '3';
+document.body.appendChild(shareMomentButton);
 
 const createAmbientMusic = () => {
     const state = {
@@ -235,32 +332,41 @@ if (grainEnabled) {
     const grainCanvas = document.createElement('canvas');
     grainCanvas.width = 128;
     grainCanvas.height = 128;
-    grainCanvas.style.position = 'absolute';
-    grainCanvas.style.inset = '0';
-    grainCanvas.style.width = '100%';
-    grainCanvas.style.height = '100%';
-    grainCanvas.style.opacity = '0.06';
-    grainCanvas.style.imageRendering = 'pixelated';
-    grainCanvas.style.mixBlendMode = 'soft-light';
-    uiLayer.appendChild(grainCanvas);
-
     const grainCtx = grainCanvas.getContext('2d');
     const grainImage = grainCtx.createImageData(grainCanvas.width, grainCanvas.height);
     const grainData = grainImage.data;
 
-    const updateGrain = () => {
-        for (let i = 0; i < grainData.length; i += 4) {
-            const value = Math.random() * 255;
-            grainData[i] = value;
-            grainData[i + 1] = value;
-            grainData[i + 2] = value;
-            grainData[i + 3] = 18;
-        }
-        grainCtx.putImageData(grainImage, 0, 0);
-    };
+    for (let i = 0; i < grainData.length; i += 4) {
+        const value = Math.random() * 255;
+        grainData[i] = value;
+        grainData[i + 1] = value;
+        grainData[i + 2] = value;
+        grainData[i + 3] = 22;
+    }
+    grainCtx.putImageData(grainImage, 0, 0);
 
-    updateGrain();
-    setInterval(updateGrain, 200);
+    const grainLayer = document.createElement('div');
+    grainLayer.style.position = 'absolute';
+    grainLayer.style.inset = '0';
+    grainLayer.style.opacity = '0.06';
+    grainLayer.style.imageRendering = 'pixelated';
+    grainLayer.style.mixBlendMode = 'soft-light';
+    grainLayer.style.backgroundImage = `url(${grainCanvas.toDataURL('image/png')})`;
+    grainLayer.style.backgroundSize = '128px 128px';
+    grainLayer.style.animation = 'grainShift 1.4s steps(1) infinite';
+    uiLayer.appendChild(grainLayer);
+
+    const grainStyle = document.createElement('style');
+    grainStyle.textContent = `
+        @keyframes grainShift {
+            0% { background-position: 0 0; }
+            25% { background-position: 20px -30px; }
+            50% { background-position: -20px 20px; }
+            75% { background-position: 30px 10px; }
+            100% { background-position: 0 0; }
+        }
+    `;
+    document.head.appendChild(grainStyle);
 }
 
 const timeBar = document.createElement('div');
@@ -564,6 +670,120 @@ const player = new Player(scene, camera, terrain, {
     }
 });
 
+const getCurrentViewAngles = () => {
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+    return {
+        yaw: Math.atan2(direction.x, direction.z),
+        pitch: Math.asin(THREE.MathUtils.clamp(direction.y, -1, 1))
+    };
+};
+
+const getCurrentTod = (cycle) => {
+    if (environment.overrideMode === 'day' || environment.overrideMode === 'night') {
+        return environment.overrideMode;
+    }
+    if (cycle) {
+        return cycle.isDay ? 'day' : 'night';
+    }
+    return null;
+};
+
+const applySharedMomentFromUrl = () => {
+    const hasPosition = Number.isFinite(sharedMomentState.x) && Number.isFinite(sharedMomentState.z);
+    if (hasPosition) {
+        player.playerObject.position.x = sharedMomentState.x;
+        player.playerObject.position.z = sharedMomentState.z;
+        if (Number.isFinite(sharedMomentState.y)) {
+            player.playerObject.position.y = sharedMomentState.y;
+        } else {
+            player.alignToTerrain(0);
+        }
+    }
+
+    if (Number.isFinite(sharedMomentState.yaw) || Number.isFinite(sharedMomentState.pitch)) {
+        const yaw = Number.isFinite(sharedMomentState.yaw) ? sharedMomentState.yaw : 0;
+        const pitch = Number.isFinite(sharedMomentState.pitch)
+            ? THREE.MathUtils.clamp(sharedMomentState.pitch, -Math.PI / 2 + 0.05, Math.PI / 2 - 0.05)
+            : 0;
+        camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+    }
+
+    if (sharedMomentState.tod === 'day' || sharedMomentState.tod === 'night') {
+        environment.setOverrideMode(sharedMomentState.tod);
+    }
+
+    if (sharedMomentState.isShared) {
+        trackEvent('moment_share_opened', {
+            tod: sharedMomentState.tod === 'day' || sharedMomentState.tod === 'night' ? sharedMomentState.tod : 'auto'
+        });
+        showToast('Viewing Shared Moment');
+    }
+};
+
+const buildSharedMomentUrl = (cycle) => {
+    const url = new URL(window.location.href);
+    const urlParams = new URLSearchParams(url.search);
+    ['px', 'py', 'pz', 'yaw', 'pitch', 'tod', 'shared'].forEach((key) => urlParams.delete(key));
+
+    const position = player.playerObject.position;
+    const view = getCurrentViewAngles();
+    urlParams.set('px', position.x.toFixed(2));
+    urlParams.set('py', position.y.toFixed(2));
+    urlParams.set('pz', position.z.toFixed(2));
+    urlParams.set('yaw', view.yaw.toFixed(4));
+    urlParams.set('pitch', view.pitch.toFixed(4));
+    urlParams.set('shared', '1');
+
+    const tod = getCurrentTod(cycle);
+    if (tod) {
+        urlParams.set('tod', tod);
+    }
+
+    url.search = urlParams.toString();
+    return { url: url.toString(), tod: tod || 'auto' };
+};
+
+let latestCycle = null;
+applySharedMomentFromUrl();
+
+shareMomentButton.addEventListener('click', async () => {
+    const shared = buildSharedMomentUrl(latestCycle);
+    const sharePayload = {
+        title: 'Tova',
+        text: 'Explore this Tova moment',
+        url: shared.url
+    };
+
+    if (typeof navigator.share === 'function') {
+        try {
+            await navigator.share(sharePayload);
+            trackEvent('moment_share_clicked', { method: 'web_share', tod: shared.tod });
+            showToast('Moment Shared');
+            return;
+        } catch (error) {
+            if (error && error.name === 'AbortError') {
+                return;
+            }
+        }
+    }
+
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+            await navigator.clipboard.writeText(shared.url);
+            trackEvent('moment_share_clicked', { method: 'clipboard', tod: shared.tod });
+            showToast('Moment Link Copied');
+            return;
+        } catch (error) {
+            console.debug('Clipboard copy failed', error);
+        }
+    }
+
+    window.prompt('Copy this Tova moment link', shared.url);
+    trackEvent('moment_share_clicked', { method: 'prompt', tod: shared.tod });
+    showToast('Copy Link From Prompt');
+});
+
 // Animation Loop
 const clock = new THREE.Clock();
 
@@ -590,6 +810,7 @@ function animate() {
     ocean.update(time);
     player.update(delta);
     const cycle = environment.update(time, player.playerObject.position);
+    latestCycle = cycle;
     if (cycle) {
         castle.setNightGlow(cycle.night * 0.55);
     }

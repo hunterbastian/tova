@@ -1,0 +1,16 @@
+{
+  "forestCount": 480,
+  "forestSpruceRatio": 0.75,
+  "forestRegion": {"xMin": -60.0, "xMax": 230.0, "zMin": -230.0, "zMax": 230.0},
+  "mountainLayers": 4,
+  "mountainRadius": 420.0,
+  "mountainHeight": 210.0,
+  "mountainSegments": 200,
+  "mountainHaze": 0.08,
+  "mountainBaseLift": 12.0,
+  "mountainJaggedness": 0.35,
+  "mountainSnowlineStart": 0.58,
+  "mountainSnowlineFade": 0.18,
+  "castleEnabled": true,
+  "townEnabled": true
+}
