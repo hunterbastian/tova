@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:atlas": "vite --host 0.0.0.0 --port 4173 --strictPort",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:atlas": "vite preview --host 0.0.0.0 --port 4173 --strictPort"
   },
   "dependencies": {
     "three": "^0.160.0"

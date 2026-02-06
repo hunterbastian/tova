@@ -29,3 +29,20 @@ Original prompt: Propose AND implement one high-leverage viral feature for my ap
 - Reduced draw calls by merging Town meshes per material and marked forest instancing matrices as static for better GPU batching (M2).
 
 - Merged castle meshes into a single stone mesh to reduce draw calls (src/structures/Castle.js).
+
+- Implemented voxel terrain/chunk pipeline under `src/game/` with authored-core + blend ring + procedural frontier generation:
+  - Added `TerrainField`/`AuthoredField` interfaces and deterministic seed-based sampling (`src/game/world/TerrainField.js`).
+  - Added chunk data + generation (`src/game/world/Chunk.js`, `src/game/world/WorldGen.js`).
+  - Added face-culling voxel mesher (`src/game/mesh/VoxelMesher.js`).
+  - Added chunk streaming manager with load radius 4, unload radius 5, and safe frame budgets (`src/game/world/ChunkManager.js`).
+  - Added `VoxelWorld` facade for runtime integration (`src/game/world/VoxelWorld.js`).
+- Switched runtime integration in `src/main.js` from static terrain/ocean/mountains/structures to `VoxelWorld` chunk streaming while keeping existing player/environment/UI loop.
+- Added chunk debug HUD readout (current chunk, loaded count, queue, zone) and restored `window.render_game_to_text`/`window.advanceTime` hooks.
+- Validation:
+  - `npm run build` passes.
+  - Playwright skill client launch failed in this environment due Chromium headless permission error (`bootstrap_check_in ... Permission denied (1100)`).
+
+- Next TODO ideas:
+  - Move chunk generation/meshing to workers to reduce main-thread hitches.
+  - Add biome-aware color/material variation and lightweight structure block stamps (castle/town silhouettes).
+  - Expand minimap bounds/logic to reflect 4km core + frontier instead of old handcrafted-map bounds.

@@ -1,12 +1,7 @@
 import * as THREE from 'three';
 import { Environment } from './world/Environment.js';
-import { Terrain } from './world/Terrain.js';
-import { Ocean } from './world/Ocean.js';
-import { Mountains } from './world/Mountains.js';
-import { Forest } from './world/Forest.js';
-import { Castle } from './structures/Castle.js';
-import { Town } from './structures/Town.js';
 import { Player } from './controls/Player.js';
+import { VoxelWorld } from './game/world/VoxelWorld.js';
 import ambientTrackUrl from './assets/fantasy-medieval-ambient.mp3';
 
 const parseNumber = (value, fallback) => {
@@ -14,27 +9,11 @@ const parseNumber = (value, fallback) => {
     return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const readFiniteParam = (paramsRef, key) => {
-    const raw = paramsRef.get(key);
-    if (raw === null) return null;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) ? parsed : null;
-};
-
 const params = new URLSearchParams(window.location.search);
 const bloomParam = params.get('bloom');
 const shadowsParam = params.get('shadows');
 const grainParam = params.get('grain');
 const vignetteParam = params.get('vignette');
-const sharedMomentState = {
-    isShared: params.get('shared') === '1',
-    x: readFiniteParam(params, 'px'),
-    y: readFiniteParam(params, 'py'),
-    z: readFiniteParam(params, 'pz'),
-    yaw: readFiniteParam(params, 'yaw'),
-    pitch: readFiniteParam(params, 'pitch'),
-    tod: params.get('tod')
-};
 const perf = {
     // Default to "pretty" unless explicitly turned off by query params.
     maxPixelRatio: Math.min(2, Math.max(0.75, parseNumber(params.get('pixelRatio'), 1.5))),
@@ -167,7 +146,7 @@ ambientToggle.type = 'button';
 ambientToggle.textContent = 'Music On';
 ambientToggle.style.position = 'fixed';
 ambientToggle.style.right = '16px';
-ambientToggle.style.bottom = '16px';
+ambientToggle.style.bottom = '224px';
 ambientToggle.style.padding = '6px 10px';
 ambientToggle.style.borderRadius = '8px';
 ambientToggle.style.border = '1px solid rgba(255, 255, 255, 0.2)';
@@ -182,25 +161,209 @@ ambientToggle.style.pointerEvents = 'auto';
 ambientToggle.style.zIndex = '3';
 document.body.appendChild(ambientToggle);
 
-const shareMomentButton = document.createElement('button');
-shareMomentButton.type = 'button';
-shareMomentButton.textContent = 'Share Moment';
-shareMomentButton.style.position = 'fixed';
-shareMomentButton.style.right = '16px';
-shareMomentButton.style.bottom = '52px';
-shareMomentButton.style.padding = '6px 10px';
-shareMomentButton.style.borderRadius = '8px';
-shareMomentButton.style.border = '1px solid rgba(255, 255, 255, 0.2)';
-shareMomentButton.style.background = 'rgba(6, 10, 18, 0.45)';
-shareMomentButton.style.color = '#f0f3ff';
-shareMomentButton.style.fontFamily = 'serif';
-shareMomentButton.style.fontSize = '11px';
-shareMomentButton.style.letterSpacing = '0.12em';
-shareMomentButton.style.textTransform = 'uppercase';
-shareMomentButton.style.cursor = 'pointer';
-shareMomentButton.style.pointerEvents = 'auto';
-shareMomentButton.style.zIndex = '3';
-document.body.appendChild(shareMomentButton);
+const minimapSize = 164;
+const minimapBounds = {
+    minX: -250,
+    maxX: 250,
+    minZ: -250,
+    maxZ: 250
+};
+const minimapWorldWidth = minimapBounds.maxX - minimapBounds.minX;
+const minimapWorldDepth = minimapBounds.maxZ - minimapBounds.minZ;
+const minimapGridSize = 56;
+const mapMilestones = [0.25, 0.5, 0.75];
+const exploredMapCells = new Set();
+let nextMapMilestoneIndex = 0;
+
+const minimapContainer = document.createElement('div');
+minimapContainer.style.position = 'fixed';
+minimapContainer.style.right = '16px';
+minimapContainer.style.bottom = '16px';
+minimapContainer.style.padding = '8px';
+minimapContainer.style.borderRadius = '12px';
+minimapContainer.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+minimapContainer.style.background = 'rgba(6, 10, 18, 0.52)';
+minimapContainer.style.backdropFilter = 'blur(6px)';
+minimapContainer.style.pointerEvents = 'none';
+minimapContainer.style.zIndex = '3';
+document.body.appendChild(minimapContainer);
+
+const minimapHeader = document.createElement('div');
+minimapHeader.style.display = 'flex';
+minimapHeader.style.alignItems = 'center';
+minimapHeader.style.justifyContent = 'space-between';
+minimapHeader.style.marginBottom = '6px';
+minimapHeader.style.fontFamily = 'serif';
+minimapHeader.style.fontSize = '10px';
+minimapHeader.style.letterSpacing = '0.08em';
+minimapHeader.style.textTransform = 'uppercase';
+minimapHeader.style.color = '#f0f3ff';
+
+const minimapRegionLabel = document.createElement('span');
+minimapRegionLabel.textContent = 'Unknown';
+
+const minimapProgressLabel = document.createElement('span');
+minimapProgressLabel.textContent = '0%';
+
+minimapHeader.appendChild(minimapRegionLabel);
+minimapHeader.appendChild(minimapProgressLabel);
+minimapContainer.appendChild(minimapHeader);
+
+const minimapCanvas = document.createElement('canvas');
+minimapCanvas.width = minimapSize;
+minimapCanvas.height = minimapSize;
+minimapCanvas.style.width = `${minimapSize}px`;
+minimapCanvas.style.height = `${minimapSize}px`;
+minimapCanvas.style.display = 'block';
+minimapCanvas.style.borderRadius = '8px';
+minimapCanvas.style.border = '1px solid rgba(255, 255, 255, 0.14)';
+minimapContainer.appendChild(minimapCanvas);
+
+const minimapBaseCanvas = document.createElement('canvas');
+minimapBaseCanvas.width = minimapSize;
+minimapBaseCanvas.height = minimapSize;
+const minimapFogCanvas = document.createElement('canvas');
+minimapFogCanvas.width = minimapSize;
+minimapFogCanvas.height = minimapSize;
+
+const minimapCtx = minimapCanvas.getContext('2d');
+const minimapBaseCtx = minimapBaseCanvas.getContext('2d');
+const minimapFogCtx = minimapFogCanvas.getContext('2d');
+const minimapDirection = new THREE.Vector3();
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+const worldToMinimap = (x, z) => {
+    const normalizedX = (x - minimapBounds.minX) / minimapWorldWidth;
+    const normalizedZ = (z - minimapBounds.minZ) / minimapWorldDepth;
+    return {
+        x: clamp(normalizedX, 0, 1) * minimapSize,
+        y: (1 - clamp(normalizedZ, 0, 1)) * minimapSize
+    };
+};
+
+const drawMinimapBase = () => {
+    const gradient = minimapBaseCtx.createLinearGradient(0, 0, minimapSize, minimapSize);
+    gradient.addColorStop(0, '#1f3726');
+    gradient.addColorStop(0.6, '#314f34');
+    gradient.addColorStop(1, '#415938');
+    minimapBaseCtx.fillStyle = gradient;
+    minimapBaseCtx.fillRect(0, 0, minimapSize, minimapSize);
+
+    const oceanEdge = worldToMinimap(-105, 0).x;
+    minimapBaseCtx.fillStyle = 'rgba(39, 75, 120, 0.85)';
+    minimapBaseCtx.fillRect(0, 0, oceanEdge, minimapSize);
+
+    const drawRegionTint = (x, z, worldRadius, color) => {
+        const center = worldToMinimap(x, z);
+        const radius = Math.max(8, (worldRadius / minimapWorldWidth) * minimapSize);
+        minimapBaseCtx.fillStyle = color;
+        minimapBaseCtx.beginPath();
+        minimapBaseCtx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+        minimapBaseCtx.fill();
+    };
+
+    drawRegionTint(-20, 120, 95, 'rgba(122, 143, 92, 0.3)');
+    drawRegionTint(-10, -125, 90, 'rgba(32, 88, 54, 0.3)');
+    drawRegionTint(170, 165, 110, 'rgba(108, 115, 122, 0.3)');
+    drawRegionTint(0, 0, 48, 'rgba(180, 172, 138, 0.32)');
+    drawRegionTint(60, 0, 52, 'rgba(166, 140, 104, 0.32)');
+
+    const castle = worldToMinimap(0, 0);
+    minimapBaseCtx.fillStyle = '#ffe3ab';
+    minimapBaseCtx.beginPath();
+    minimapBaseCtx.arc(castle.x, castle.y, 3, 0, Math.PI * 2);
+    minimapBaseCtx.fill();
+
+    const townCenter = worldToMinimap(60, 0);
+    minimapBaseCtx.fillStyle = '#f5caa8';
+    minimapBaseCtx.beginPath();
+    minimapBaseCtx.arc(townCenter.x, townCenter.y, 2.5, 0, Math.PI * 2);
+    minimapBaseCtx.fill();
+};
+
+drawMinimapBase();
+minimapFogCtx.fillStyle = 'rgba(3, 7, 13, 0.94)';
+minimapFogCtx.fillRect(0, 0, minimapSize, minimapSize);
+
+const getMinimapYaw = () => {
+    camera.getWorldDirection(minimapDirection);
+    return Math.atan2(minimapDirection.x, minimapDirection.z);
+};
+
+const revealMinimapArea = (x, z, worldRadius = 22) => {
+    const marker = worldToMinimap(x, z);
+    const minimapRadius = Math.max(9, (worldRadius / minimapWorldWidth) * minimapSize);
+    const revealGradient = minimapFogCtx.createRadialGradient(
+        marker.x, marker.y, minimapRadius * 0.25,
+        marker.x, marker.y, minimapRadius
+    );
+    revealGradient.addColorStop(0, 'rgba(0, 0, 0, 0.9)');
+    revealGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    minimapFogCtx.save();
+    minimapFogCtx.globalCompositeOperation = 'destination-out';
+    minimapFogCtx.fillStyle = revealGradient;
+    minimapFogCtx.beginPath();
+    minimapFogCtx.arc(marker.x, marker.y, minimapRadius, 0, Math.PI * 2);
+    minimapFogCtx.fill();
+    minimapFogCtx.restore();
+
+    const cellRadiusX = Math.ceil((worldRadius / minimapWorldWidth) * minimapGridSize);
+    const cellRadiusZ = Math.ceil((worldRadius / minimapWorldDepth) * minimapGridSize);
+    const centerGX = Math.floor(((x - minimapBounds.minX) / minimapWorldWidth) * minimapGridSize);
+    const centerGZ = Math.floor(((z - minimapBounds.minZ) / minimapWorldDepth) * minimapGridSize);
+
+    for (let gz = centerGZ - cellRadiusZ; gz <= centerGZ + cellRadiusZ; gz += 1) {
+        if (gz < 0 || gz >= minimapGridSize) continue;
+        for (let gx = centerGX - cellRadiusX; gx <= centerGX + cellRadiusX; gx += 1) {
+            if (gx < 0 || gx >= minimapGridSize) continue;
+            const worldX = minimapBounds.minX + ((gx + 0.5) / minimapGridSize) * minimapWorldWidth;
+            const worldZ = minimapBounds.minZ + ((gz + 0.5) / minimapGridSize) * minimapWorldDepth;
+            const dx = worldX - x;
+            const dz = worldZ - z;
+            if (dx * dx + dz * dz > worldRadius * worldRadius) continue;
+            exploredMapCells.add(`${gx}:${gz}`);
+        }
+    }
+
+    const completion = exploredMapCells.size / (minimapGridSize * minimapGridSize);
+    minimapProgressLabel.textContent = `${Math.round(completion * 100)}%`;
+    if (nextMapMilestoneIndex < mapMilestones.length && completion >= mapMilestones[nextMapMilestoneIndex]) {
+        const milestonePercent = Math.round(mapMilestones[nextMapMilestoneIndex] * 100);
+        showToast(`Map ${milestonePercent}% Revealed`);
+        trackEvent('map_exploration_milestone', { milestone_percent: milestonePercent });
+        nextMapMilestoneIndex += 1;
+    }
+};
+
+const renderMinimap = (x, z) => {
+    const marker = worldToMinimap(x, z);
+    minimapCtx.clearRect(0, 0, minimapSize, minimapSize);
+    minimapCtx.drawImage(minimapBaseCanvas, 0, 0);
+    minimapCtx.drawImage(minimapFogCanvas, 0, 0);
+
+    minimapCtx.save();
+    minimapCtx.translate(marker.x, marker.y);
+    minimapCtx.rotate(getMinimapYaw());
+
+    minimapCtx.fillStyle = 'rgba(240, 243, 255, 0.26)';
+    minimapCtx.beginPath();
+    minimapCtx.moveTo(0, -5);
+    minimapCtx.lineTo(-10, -24);
+    minimapCtx.lineTo(10, -24);
+    minimapCtx.closePath();
+    minimapCtx.fill();
+
+    minimapCtx.fillStyle = '#f0f3ff';
+    minimapCtx.beginPath();
+    minimapCtx.moveTo(0, -7);
+    minimapCtx.lineTo(5, 5);
+    minimapCtx.lineTo(-5, 5);
+    minimapCtx.closePath();
+    minimapCtx.fill();
+    minimapCtx.restore();
+};
 
 const createAmbientMusic = () => {
     const state = {
@@ -446,8 +609,12 @@ fpsLabel.textContent = 'FPS 60';
 const coordsLabel = document.createElement('div');
 coordsLabel.textContent = 'X 0.0 Y 0.0 Z 0.0';
 
+const chunkLabel = document.createElement('div');
+chunkLabel.textContent = 'Chunk 0,0 | Loaded 0 | Queue 0/0 | CORE';
+
 stats.appendChild(fpsLabel);
 stats.appendChild(coordsLabel);
+stats.appendChild(chunkLabel);
 document.body.appendChild(stats);
 
 const hud = document.createElement('div');
@@ -524,17 +691,13 @@ setTimeIcon(true);
 
 // Initialize World Components
 const environment = new Environment(scene, { enableShadows: perf.enableShadows, dayLength: 120, nightLength: 120 });
-const terrain = new Terrain(scene, { enableShadows: perf.enableShadows });
-const ocean = new Ocean(scene);
-const mountains = new Mountains(scene, { radius: 420, height: 210, layers: 4, haze: 0.08, baseLift: 12 });
-const forest = new Forest(scene, terrain, { enableShadows: perf.enableShadows });
-
-const castle = new Castle(scene, terrain, { enableShadows: perf.enableShadows });
-const town = new Town(scene, terrain, { enableShadows: perf.enableShadows });
+const voxelWorld = new VoxelWorld(scene, { enableShadows: perf.enableShadows });
+const terrainAdapter = {
+    getHeightAt: (x, z) => voxelWorld.getHeightAt(x, z)
+};
 
 if (perf.enableShadows) {
-    renderer.shadowMap.autoUpdate = false;
-    renderer.shadowMap.needsUpdate = true;
+    renderer.shadowMap.autoUpdate = true;
 }
 
 let composer = null;
@@ -660,7 +823,7 @@ window.addEventListener('resize', () => {
     }
 });
 
-const player = new Player(scene, camera, terrain, {
+const player = new Player(scene, camera, terrainAdapter, {
     onCommand: (cmd) => {
         if (cmd === 'day') {
             environment.setOverrideMode('day');
@@ -670,119 +833,53 @@ const player = new Player(scene, camera, terrain, {
     }
 });
 
-const getCurrentViewAngles = () => {
-    const direction = new THREE.Vector3();
-    camera.getWorldDirection(direction);
-    return {
-        yaw: Math.atan2(direction.x, direction.z),
-        pitch: Math.asin(THREE.MathUtils.clamp(direction.y, -1, 1))
-    };
-};
+const worldRegions = [
+    { id: 'crown_keep', name: 'Crown Keep', test: (x, z) => Math.hypot(x, z) <= 48 },
+    { id: 'market_village', name: 'Market Village', test: (x, z) => Math.hypot(x - 60, z) <= 54 },
+    { id: 'saltshore', name: 'Saltshore', test: (x) => x <= -110 },
+    { id: 'highlands', name: 'Highlands', test: (x, z) => z >= 95 && x > -110 },
+    { id: 'whisperwood', name: 'Whisperwood', test: (x, z) => z <= -90 && x > -110 },
+    { id: 'outer_peaks', name: 'Outer Peaks', test: (x, z) => Math.abs(x) >= 165 || Math.abs(z) >= 165 },
+    { id: 'heartlands', name: 'Heartlands', test: () => true }
+];
 
-const getCurrentTod = (cycle) => {
-    if (environment.overrideMode === 'day' || environment.overrideMode === 'night') {
-        return environment.overrideMode;
-    }
-    if (cycle) {
-        return cycle.isDay ? 'day' : 'night';
-    }
-    return null;
-};
+const discoveredRegions = new Set();
+let currentRegionId = null;
+let regionToastCooldown = 0;
+let mapRevealTick = 0;
 
-const applySharedMomentFromUrl = () => {
-    const hasPosition = Number.isFinite(sharedMomentState.x) && Number.isFinite(sharedMomentState.z);
-    if (hasPosition) {
-        player.playerObject.position.x = sharedMomentState.x;
-        player.playerObject.position.z = sharedMomentState.z;
-        if (Number.isFinite(sharedMomentState.y)) {
-            player.playerObject.position.y = sharedMomentState.y;
-        } else {
-            player.alignToTerrain(0);
-        }
-    }
+const findRegion = (x, z) => worldRegions.find((region) => region.test(x, z)) ?? worldRegions[worldRegions.length - 1];
 
-    if (Number.isFinite(sharedMomentState.yaw) || Number.isFinite(sharedMomentState.pitch)) {
-        const yaw = Number.isFinite(sharedMomentState.yaw) ? sharedMomentState.yaw : 0;
-        const pitch = Number.isFinite(sharedMomentState.pitch)
-            ? THREE.MathUtils.clamp(sharedMomentState.pitch, -Math.PI / 2 + 0.05, Math.PI / 2 - 0.05)
-            : 0;
-        camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
-    }
+const updateRegionDiscovery = (x, z) => {
+    const region = findRegion(x, z);
+    if (!region) return;
 
-    if (sharedMomentState.tod === 'day' || sharedMomentState.tod === 'night') {
-        environment.setOverrideMode(sharedMomentState.tod);
-    }
+    minimapRegionLabel.textContent = region.name;
+    if (region.id === currentRegionId) return;
 
-    if (sharedMomentState.isShared) {
-        trackEvent('moment_share_opened', {
-            tod: sharedMomentState.tod === 'day' || sharedMomentState.tod === 'night' ? sharedMomentState.tod : 'auto'
+    currentRegionId = region.id;
+    if (regionToastCooldown > 0) return;
+
+    const isFirstDiscovery = !discoveredRegions.has(region.id);
+    discoveredRegions.add(region.id);
+
+    showToast(isFirstDiscovery ? `${region.name} Discovered` : region.name);
+    if (isFirstDiscovery) {
+        trackEvent('biome_discovered', {
+            biome_id: region.id,
+            biome_name: region.name,
+            x: Number(x.toFixed(1)),
+            z: Number(z.toFixed(1))
         });
-        showToast('Viewing Shared Moment');
     }
+
+    regionToastCooldown = 1.1;
 };
 
-const buildSharedMomentUrl = (cycle) => {
-    const url = new URL(window.location.href);
-    const urlParams = new URLSearchParams(url.search);
-    ['px', 'py', 'pz', 'yaw', 'pitch', 'tod', 'shared'].forEach((key) => urlParams.delete(key));
-
-    const position = player.playerObject.position;
-    const view = getCurrentViewAngles();
-    urlParams.set('px', position.x.toFixed(2));
-    urlParams.set('py', position.y.toFixed(2));
-    urlParams.set('pz', position.z.toFixed(2));
-    urlParams.set('yaw', view.yaw.toFixed(4));
-    urlParams.set('pitch', view.pitch.toFixed(4));
-    urlParams.set('shared', '1');
-
-    const tod = getCurrentTod(cycle);
-    if (tod) {
-        urlParams.set('tod', tod);
-    }
-
-    url.search = urlParams.toString();
-    return { url: url.toString(), tod: tod || 'auto' };
-};
-
-let latestCycle = null;
-applySharedMomentFromUrl();
-
-shareMomentButton.addEventListener('click', async () => {
-    const shared = buildSharedMomentUrl(latestCycle);
-    const sharePayload = {
-        title: 'Tova',
-        text: 'Explore this Tova moment',
-        url: shared.url
-    };
-
-    if (typeof navigator.share === 'function') {
-        try {
-            await navigator.share(sharePayload);
-            trackEvent('moment_share_clicked', { method: 'web_share', tod: shared.tod });
-            showToast('Moment Shared');
-            return;
-        } catch (error) {
-            if (error && error.name === 'AbortError') {
-                return;
-            }
-        }
-    }
-
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        try {
-            await navigator.clipboard.writeText(shared.url);
-            trackEvent('moment_share_clicked', { method: 'clipboard', tod: shared.tod });
-            showToast('Moment Link Copied');
-            return;
-        } catch (error) {
-            console.debug('Clipboard copy failed', error);
-        }
-    }
-
-    window.prompt('Copy this Tova moment link', shared.url);
-    trackEvent('moment_share_clicked', { method: 'prompt', tod: shared.tod });
-    showToast('Copy Link From Prompt');
-});
+const playerStart = player.playerObject.position;
+revealMinimapArea(playerStart.x, playerStart.z, 26);
+renderMinimap(playerStart.x, playerStart.z);
+updateRegionDiscovery(playerStart.x, playerStart.z);
 
 // Animation Loop
 const clock = new THREE.Clock();
@@ -797,6 +894,8 @@ function animate() {
     const delta = clock.getDelta();
     const time = clock.getElapsedTime();
     uiTimer += delta;
+    mapRevealTick += delta;
+    regionToastCooldown = Math.max(0, regionToastCooldown - delta);
 
     fpsFrames += 1;
     fpsTimer += delta;
@@ -807,35 +906,40 @@ function animate() {
         fpsFrames = 0;
     }
 
-    ocean.update(time);
     player.update(delta);
+    voxelWorld.update(player.playerObject.position);
     const cycle = environment.update(time, player.playerObject.position);
-    latestCycle = cycle;
-    if (cycle) {
-        castle.setNightGlow(cycle.night * 0.55);
+
+    if (mapRevealTick >= 0.08) {
+        mapRevealTick = 0;
+        const pos = player.playerObject.position;
+        revealMinimapArea(pos.x, pos.z, 24);
+        renderMinimap(pos.x, pos.z);
+        updateRegionDiscovery(pos.x, pos.z);
     }
-    mountains.update(player.playerObject.position);
 
     if (uiTimer >= 0.5) {
         uiTimer = 0;
         const pos = player.playerObject.position;
         coordsLabel.textContent = `X ${pos.x.toFixed(1)} Y ${pos.y.toFixed(1)} Z ${pos.z.toFixed(1)}`;
+        const worldStats = voxelWorld.getDebugStats(pos.x, pos.z);
+        chunkLabel.textContent = `Chunk ${worldStats.playerChunkX},${worldStats.playerChunkZ} | Loaded ${worldStats.loadedChunks} | Queue ${worldStats.pendingChunks}/${worldStats.pendingMeshes} | ${worldStats.zone.toUpperCase()}`;
 
         if (cycle) {
             const cycleLength = cycle.isDay ? environment.dayLength : environment.nightLength;
             const progress = cycleLength === 0 ? 0 : (cycleLength - cycle.timeToNext) / cycleLength;
             timeBarFill.style.width = `${Math.max(0, Math.min(1, progress)) * 100}%`;
-        timeBarFill.style.background = cycle.isDay
-            ? 'linear-gradient(90deg, #f7b46a, #fff1d0)'
-            : 'linear-gradient(90deg, #2a3f6e, #a0b6ff)';
-        setTimeIcon(cycle.isDay);
+            timeBarFill.style.background = cycle.isDay
+                ? 'linear-gradient(90deg, #f7b46a, #fff1d0)'
+                : 'linear-gradient(90deg, #2a3f6e, #a0b6ff)';
+            setTimeIcon(cycle.isDay);
 
-        if (environment.sunLight) {
-            sunGlow.position.copy(environment.sunLight.position);
-            const glowStrength = 0.15 + cycle.daylight * 0.85;
-            sunGlow.material.opacity = glowStrength;
+            if (environment.sunLight) {
+                sunGlow.position.copy(environment.sunLight.position);
+                const glowStrength = 0.15 + cycle.daylight * 0.85;
+                sunGlow.material.opacity = glowStrength;
+            }
         }
-    }
     }
 
     // Simple camera rotation for overview
@@ -845,6 +949,40 @@ function animate() {
 
     renderFrame();
 }
+
+window.render_game_to_text = () => {
+    const pos = player.playerObject.position;
+    const stats = voxelWorld.getDebugStats(pos.x, pos.z);
+    return JSON.stringify({
+        mode: 'play',
+        coordinate_system: 'x-right, y-up, z-forward',
+        player: {
+            x: Number(pos.x.toFixed(2)),
+            y: Number(pos.y.toFixed(2)),
+            z: Number(pos.z.toFixed(2)),
+            flying: player.isFlying
+        },
+        chunks: {
+            current: { x: stats.playerChunkX, z: stats.playerChunkZ },
+            loaded: stats.loadedChunks,
+            pending_generation: stats.pendingChunks,
+            pending_meshes: stats.pendingMeshes
+        },
+        world_zone: stats.zone
+    });
+};
+
+window.advanceTime = (ms) => new Promise((resolve) => {
+    const end = performance.now() + Math.max(0, ms);
+    const step = (now) => {
+        if (now >= end) {
+            resolve();
+            return;
+        }
+        requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+});
 
 // Hide loading screen
 const loadingScreen = document.getElementById('loading');

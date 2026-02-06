@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 
 export class Player {
@@ -9,6 +8,9 @@ export class Player {
         this.onCommand = options.onCommand ?? null;
 
         this.controls = new PointerLockControls(camera, document.body);
+        // Clamp vertical look slightly away from straight up/down to avoid gimbal-like jitter.
+        this.controls.minPolarAngle = 0.05;
+        this.controls.maxPolarAngle = Math.PI - 0.05;
         this.playerObject = this.controls.getObject();
 
         this.moveForward = false;
@@ -28,9 +30,6 @@ export class Player {
         this.walkSwayTime = 0;
         this.walkSwayAmount = 0.0;
         this.walkSwaySpeed = 0.0;
-        this._euler = new THREE.Euler(0, 0, 0, 'YXZ');
-        this._forward = new THREE.Vector3();
-
         // Simple chat UI for commands like `fly` / `walk`
         this.chatOpen = false;
 
@@ -253,16 +252,6 @@ export class Player {
             this.alignToTerrain(delta);
         }
 
-        const maxPitch = Math.PI / 2 - 0.05;
-        this.camera.getWorldDirection(this._forward);
-        const yaw = Math.atan2(this._forward.x, this._forward.z);
-        const pitch = Math.asin(THREE.MathUtils.clamp(this._forward.y, -1, 1));
-        this._euler.set(
-            Math.max(-maxPitch, Math.min(maxPitch, pitch)),
-            yaw,
-            0
-        );
-        this.camera.quaternion.setFromEuler(this._euler);
         // Keep Minecraft-like POV: no roll/tilt.
         this.playerObject.rotation.z = 0;
     }
