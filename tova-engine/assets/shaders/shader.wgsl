@@ -43,19 +43,28 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let n = normalize(in.normal);
     let light_dir = normalize(sun.direction);
 
-    // Diffuse lighting from the sun
-    let ndotl = max(dot(n, light_dir), 0.0);
-    let diffuse = sun.color * ndotl;
+    // Diffuse — half-lambert for softer Minecraft-style shading
+    let raw_ndotl = dot(n, light_dir);
+    let ndotl = raw_ndotl * 0.5 + 0.5; // wrap lighting
+    let diffuse = sun.color * ndotl * 0.65;
 
-    // Ambient light so shadows aren't pitch black
-    let ambient = sun.color * sun.ambient;
+    // Ambient — warm tint from sky
+    let sky_ambient = vec3<f32>(0.6, 0.7, 0.9) * sun.ambient;
+    let ground_ambient = vec3<f32>(0.4, 0.35, 0.3) * sun.ambient * 0.5;
+    let ambient = mix(ground_ambient, sky_ambient, n.y * 0.5 + 0.5);
 
     let lit_color = in.color * (ambient + diffuse);
 
     return vec4<f32>(lit_color, 1.0);
 }
 
-// Separate shader for the sword — rendered with its own view-proj (screen-space)
+// Sun disc shader — emissive, no lighting applied
+@fragment
+fn fs_sun(in: VertexOutput) -> @location(0) vec4<f32> {
+    return vec4<f32>(in.color, 1.0);
+}
+
+// Sword shaders
 struct SwordCameraUniform {
     view_proj: mat4x4<f32>,
 };
@@ -78,14 +87,17 @@ fn fs_sword(in: VertexOutput) -> @location(0) vec4<f32> {
     let n = normalize(in.normal);
     let light_dir = normalize(sun.direction);
 
-    let ndotl = max(dot(n, light_dir), 0.0);
-    let diffuse = sun.color * ndotl;
-    let ambient = sun.color * sun.ambient;
+    let raw_ndotl = dot(n, light_dir);
+    let ndotl = raw_ndotl * 0.5 + 0.5;
+    let diffuse = sun.color * ndotl * 0.65;
+
+    let sky_ambient = vec3<f32>(0.6, 0.7, 0.9) * sun.ambient;
+    let ambient = sky_ambient;
 
     // Metallic specular highlight for the blade
     let view_dir = normalize(vec3<f32>(0.0, 0.0, 1.0));
     let half_dir = normalize(light_dir + view_dir);
-    let spec = pow(max(dot(n, half_dir), 0.0), 32.0) * 0.5;
+    let spec = pow(max(dot(n, half_dir), 0.0), 32.0) * 0.4;
 
     let lit_color = in.color * (ambient + diffuse) + sun.color * spec;
 

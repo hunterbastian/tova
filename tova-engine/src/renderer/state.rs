@@ -320,7 +320,7 @@ impl RenderState {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_main"),
+                entry_point: Some("fs_sun"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -346,12 +346,12 @@ impl RenderState {
             cache: None,
         });
 
-        // Sun pixel geometry — a small quad far away in the sun direction
+        // Sun disc — large square like Minecraft's, far away in the sky
         let sun_dir = Vec3::new(0.5, 0.8, 0.3).normalize();
-        let sun_pos = sun_dir * 500.0; // far away
-        let sun_size = 2.0_f32;
-        let sun_color = [1.0_f32, 0.95, 0.7];
-        let sun_normal = [0.0_f32, 0.0, 0.0]; // unlit — emissive
+        let sun_pos = sun_dir * 800.0;
+        let sun_size = 18.0_f32; // big square like MC
+        let sun_color = [1.0_f32, 0.98, 0.88]; // warm white-yellow
+        let sun_normal = [0.0_f32, 0.0, 0.0]; // emissive — unlit
 
         let right = sun_dir.cross(Vec3::Y).normalize() * sun_size;
         let up = sun_dir.cross(right).normalize() * sun_size;
@@ -572,7 +572,7 @@ fn create_depth_texture(
 /// Generate a grid of voxel chunks and mesh them.
 fn generate_world_chunks(device: &wgpu::Device) -> Vec<ChunkMesh> {
     let mut meshes = Vec::new();
-    let radius = 4_i32;
+    let radius = 6_i32;
 
     for cz in -radius..radius {
         for cx in -radius..radius {
