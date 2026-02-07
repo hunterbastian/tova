@@ -12,7 +12,7 @@ use crate::voxel::{Chunk, VoxelMesher};
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct SunUniform {
     pub direction: [f32; 3],
-    pub _pad: f32,
+    pub fog_density: f32,
     pub color: [f32; 3],
     pub ambient: f32,
 }
@@ -42,6 +42,11 @@ pub struct RenderState {
     pub sun_pixel_index_buffer: wgpu::Buffer,
     pub sun_pixel_camera_buffer: wgpu::Buffer,
     pub sun_pixel_camera_bind_group: wgpu::BindGroup,
+    // Overlay UI
+    pub overlay_pipeline: wgpu::RenderPipeline,
+    pub overlay_vertex_buffer: wgpu::Buffer,
+    pub overlay_index_buffer: wgpu::Buffer,
+    pub overlay_num_indices: u32,
 }
 
 impl RenderState {
@@ -127,11 +132,11 @@ impl RenderState {
             }],
         });
 
-        // Sun uniform
+        // Sun uniform — fog_density starts at 1.0 (fog on)
         let sun_uniform = SunUniform {
-            direction: [0.4, 0.7, 0.2], // low angled, hazy sunlight
-            _pad: 0.0,
-            color: [0.85, 0.80, 0.70],  // muted warm light
+            direction: [0.4, 0.7, 0.2],
+            fog_density: 1.0,
+            color: [0.85, 0.80, 0.70],
             ambient: 0.30,
         };
         let sun_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -275,9 +280,9 @@ impl RenderState {
         // Sun disc — pale hazy disc, barely visible through overcast
         let sun_dir = Vec3::new(0.4, 0.7, 0.2).normalize();
         let sun_pos = sun_dir * 800.0;
-        let sun_size = 22.0_f32; // larger but hazier
-        let sun_color = [0.82_f32, 0.78, 0.68]; // pale muted yellow
-        let sun_normal = [0.0_f32, 0.0, 0.0]; // emissive — unlit
+        let sun_size = 22.0_f32;
+        let sun_color = [0.82_f32, 0.78, 0.68];
+        let sun_normal = [0.0_f32, 0.0, 0.0];
 
         let right = sun_dir.cross(Vec3::Y).normalize() * sun_size;
         let up = sun_dir.cross(right).normalize() * sun_size;
@@ -302,6 +307,55 @@ impl RenderState {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        // Overlay pipeline — alpha blending, no depth, no bind groups
+        let overlay_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("overlay_pipeline_layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        let overlay_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("overlay_pipeline"),
+            layout: Some(&overlay_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_overlay"),
+                buffers: &[Vertex::layout()],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_overlay"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        let (overlay_verts, overlay_idx) = build_overlay_geometry(false);
+        let overlay_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("overlay_vertex_buffer"),
+            contents: bytemuck::cast_slice(&overlay_verts),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+        let overlay_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("overlay_index_buffer"),
+            contents: bytemuck::cast_slice(&overlay_idx),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let overlay_num_indices = overlay_idx.len() as u32;
+
         // Generate voxel chunks
         let chunk_meshes = generate_world_chunks(&device);
 
@@ -323,6 +377,10 @@ impl RenderState {
             sun_pixel_index_buffer,
             sun_pixel_camera_buffer,
             sun_pixel_camera_bind_group,
+            overlay_pipeline,
+            overlay_vertex_buffer,
+            overlay_index_buffer,
+            overlay_num_indices,
         }
     }
 
@@ -349,7 +407,18 @@ impl RenderState {
         );
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn set_fog(&mut self, enabled: bool) {
+        let density: f32 = if enabled { 1.0 } else { 0.0 };
+        // fog_density is at byte offset 12 in SunUniform (after direction [f32; 3])
+        self.queue.write_buffer(&self.sun_buffer, 12, bytemuck::cast_slice(&[density]));
+    }
+
+    pub fn update_overlay(&mut self, god_mode: bool) {
+        let (vertices, _indices) = build_overlay_geometry(god_mode);
+        self.queue.write_buffer(&self.overlay_vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+    }
+
+    pub fn render(&mut self, paused: bool) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -414,6 +483,29 @@ impl RenderState {
             render_pass.draw_indexed(0..6, 0, 0..1);
         }
 
+        // Overlay pass — drawn on top of world when paused
+        if paused {
+            let mut overlay_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("overlay_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            overlay_pass.set_pipeline(&self.overlay_pipeline);
+            overlay_pass.set_vertex_buffer(0, self.overlay_vertex_buffer.slice(..));
+            overlay_pass.set_index_buffer(self.overlay_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            overlay_pass.draw_indexed(0..self.overlay_num_indices, 0, 0..1);
+        }
+
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
@@ -439,6 +531,38 @@ fn create_depth_texture(
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     })
+}
+
+// Button bounds in NDC — used for hit testing and geometry
+pub const BTN_LEFT: f32 = -0.25;
+pub const BTN_RIGHT: f32 = 0.25;
+pub const BTN_BOTTOM: f32 = -0.08;
+pub const BTN_TOP: f32 = 0.08;
+
+fn build_overlay_geometry(god_mode: bool) -> (Vec<Vertex>, Vec<u32>) {
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+
+    // Full-screen dark overlay — normal.x = alpha
+    let bg_alpha = [0.5_f32, 0.0, 0.0];
+    let bg_color = [0.0_f32, 0.0, 0.0];
+    vertices.push(Vertex { position: [-1.0, -1.0, 0.0], color: bg_color, normal: bg_alpha });
+    vertices.push(Vertex { position: [ 1.0, -1.0, 0.0], color: bg_color, normal: bg_alpha });
+    vertices.push(Vertex { position: [ 1.0,  1.0, 0.0], color: bg_color, normal: bg_alpha });
+    vertices.push(Vertex { position: [-1.0,  1.0, 0.0], color: bg_color, normal: bg_alpha });
+    indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
+
+    // God mode button — green when on, grey when off
+    let btn_color = if god_mode { [0.2_f32, 0.6, 0.3] } else { [0.35_f32, 0.35, 0.35] };
+    let btn_alpha = [0.85_f32, 0.0, 0.0];
+    let base = vertices.len() as u32;
+    vertices.push(Vertex { position: [BTN_LEFT,  BTN_BOTTOM, 0.0], color: btn_color, normal: btn_alpha });
+    vertices.push(Vertex { position: [BTN_RIGHT, BTN_BOTTOM, 0.0], color: btn_color, normal: btn_alpha });
+    vertices.push(Vertex { position: [BTN_RIGHT, BTN_TOP,    0.0], color: btn_color, normal: btn_alpha });
+    vertices.push(Vertex { position: [BTN_LEFT,  BTN_TOP,    0.0], color: btn_color, normal: btn_alpha });
+    indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+
+    (vertices, indices)
 }
 
 /// Generate a grid of voxel chunks and mesh them.

@@ -6,7 +6,7 @@ struct CameraUniform {
 
 struct SunUniform {
     direction: vec3<f32>,
-    _pad: f32,
+    fog_density: f32,
     color: vec3<f32>,
     ambient: f32,
 };
@@ -62,11 +62,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let lit_color = in.color * (ambient + diffuse);
 
-    // Distance fog
+    // Distance fog — controlled by fog_density uniform
     let dist = distance(in.world_pos, camera.camera_pos);
     let fog_factor = clamp((dist - FOG_START) / (FOG_END - FOG_START), 0.0, 1.0);
-    // Smooth the fog curve — quadratic feels more atmospheric than linear
-    let fog = fog_factor * fog_factor;
+    let fog = fog_factor * fog_factor * sun.fog_density;
 
     let final_color = mix(lit_color, FOG_COLOR, fog);
 
@@ -76,7 +75,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 // Sun disc shader — emissive, fades into fog at distance
 @fragment
 fn fs_sun(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Hazy sun — blend towards fog color slightly so it looks diffused
-    let haze = mix(in.color, FOG_COLOR, 0.25);
+    let haze = mix(in.color, FOG_COLOR, 0.25 * sun.fog_density);
     return vec4<f32>(haze, 1.0);
+}
+
+// Overlay shaders — 2D UI rendered directly in clip space
+@vertex
+fn vs_overlay(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    out.clip_position = vec4<f32>(in.position.xy, 0.0, 1.0);
+    out.color = in.color;
+    out.normal = in.normal;
+    out.world_pos = vec3<f32>(0.0, 0.0, 0.0);
+    return out;
+}
+
+@fragment
+fn fs_overlay(in: VertexOutput) -> @location(0) vec4<f32> {
+    return vec4<f32>(in.color, in.normal.x);
 }

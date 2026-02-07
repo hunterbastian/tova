@@ -1,4 +1,4 @@
-mod state;
+pub mod state;
 pub mod camera;
 pub mod vertex;
 
