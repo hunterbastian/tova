@@ -1,5 +1,6 @@
 mod renderer;
 mod player;
+mod voxel;
 
 use std::sync::Arc;
 use std::time::Instant;

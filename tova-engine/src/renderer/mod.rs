@@ -1,8 +1,6 @@
 mod state;
-mod camera;
-mod vertex;
+pub mod camera;
+pub mod vertex;
 
 pub use state::RenderState;
-pub use camera::Camera;
-#[allow(unused_imports)]
 pub use vertex::Vertex;
