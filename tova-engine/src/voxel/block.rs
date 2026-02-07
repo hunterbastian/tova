@@ -35,10 +35,10 @@ impl Block {
 
 pub const BLOCK_COLORS: [[f32; 3]; 7] = [
     [0.0, 0.0, 0.0],       // Air (unused)
-    [0.31, 0.54, 0.25],    // Grass
-    [0.43, 0.31, 0.20],    // Dirt
-    [0.52, 0.55, 0.58],    // Stone
-    [0.71, 0.65, 0.44],    // Sand
-    [0.16, 0.34, 0.58],    // Water
-    [0.60, 0.60, 0.62],    // Cobble
+    [0.38, 0.42, 0.32],    // Grass — grey-olive, desaturated
+    [0.40, 0.35, 0.28],    // Dirt — dusty tan
+    [0.45, 0.44, 0.42],    // Stone — warm slate grey
+    [0.55, 0.52, 0.42],    // Sand — muted khaki
+    [0.28, 0.32, 0.35],    // Water — dark slate blue-grey
+    [0.48, 0.46, 0.43],    // Cobble — weathered grey
 ];

@@ -108,7 +108,7 @@ impl RenderState {
                 label: Some("camera_bind_group_layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -129,10 +129,10 @@ impl RenderState {
 
         // Sun uniform
         let sun_uniform = SunUniform {
-            direction: [0.5, 0.8, 0.3], // angled sunlight
+            direction: [0.4, 0.7, 0.2], // low angled, hazy sunlight
             _pad: 0.0,
-            color: [1.0, 0.95, 0.85],   // warm white
-            ambient: 0.25,
+            color: [0.85, 0.80, 0.70],  // muted warm light
+            ambient: 0.30,
         };
         let sun_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("sun_buffer"),
@@ -272,11 +272,11 @@ impl RenderState {
             cache: None,
         });
 
-        // Sun disc — large square like Minecraft's, far away in the sky
-        let sun_dir = Vec3::new(0.5, 0.8, 0.3).normalize();
+        // Sun disc — pale hazy disc, barely visible through overcast
+        let sun_dir = Vec3::new(0.4, 0.7, 0.2).normalize();
         let sun_pos = sun_dir * 800.0;
-        let sun_size = 18.0_f32; // big square like MC
-        let sun_color = [1.0_f32, 0.98, 0.88]; // warm white-yellow
+        let sun_size = 22.0_f32; // larger but hazier
+        let sun_color = [0.82_f32, 0.78, 0.68]; // pale muted yellow
         let sun_normal = [0.0_f32, 0.0, 0.0]; // emissive — unlit
 
         let right = sun_dir.cross(Vec3::Y).normalize() * sun_size;
@@ -372,10 +372,11 @@ impl RenderState {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
+                        // Overcast sky — matches FOG_COLOR in shader
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.53,
-                            g: 0.72,
-                            b: 0.90,
+                            r: 0.62,
+                            g: 0.60,
+                            b: 0.56,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,

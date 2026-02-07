@@ -5,6 +5,8 @@ use glam::{Mat4, Vec3};
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct CameraUniform {
     pub view_proj: [[f32; 4]; 4],
+    pub camera_pos: [f32; 3],
+    pub _pad: f32,
 }
 
 pub struct Camera {
@@ -82,6 +84,8 @@ impl Camera {
         let proj = Mat4::perspective_rh(self.fov_y, self.aspect, self.z_near, self.z_far);
         CameraUniform {
             view_proj: (proj * view).to_cols_array_2d(),
+            camera_pos: self.position.to_array(),
+            _pad: 0.0,
         }
     }
 }

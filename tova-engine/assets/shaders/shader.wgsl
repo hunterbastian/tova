@@ -1,5 +1,7 @@
 struct CameraUniform {
     view_proj: mat4x4<f32>,
+    camera_pos: vec3<f32>,
+    _pad: f32,
 };
 
 struct SunUniform {
@@ -14,6 +16,11 @@ var<uniform> camera: CameraUniform;
 
 @group(1) @binding(0)
 var<uniform> sun: SunUniform;
+
+// Fog settings — Morrowind-style dense atmospheric fog
+const FOG_COLOR: vec3<f32> = vec3<f32>(0.62, 0.60, 0.56); // warm overcast grey
+const FOG_START: f32 = 20.0;   // fog begins here
+const FOG_END: f32 = 120.0;    // fully fogged at this distance
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -43,24 +50,33 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let n = normalize(in.normal);
     let light_dir = normalize(sun.direction);
 
-    // Diffuse — half-lambert for softer Minecraft-style shading
+    // Diffuse — half-lambert for soft wrap lighting
     let raw_ndotl = dot(n, light_dir);
-    let ndotl = raw_ndotl * 0.5 + 0.5; // wrap lighting
-    let diffuse = sun.color * ndotl * 0.65;
+    let ndotl = raw_ndotl * 0.5 + 0.5;
+    let diffuse = sun.color * ndotl * 0.55;
 
-    // Ambient — warm tint from sky
-    let sky_ambient = vec3<f32>(0.6, 0.7, 0.9) * sun.ambient;
-    let ground_ambient = vec3<f32>(0.4, 0.35, 0.3) * sun.ambient * 0.5;
+    // Ambient — muted, slightly warm from above, cooler from below
+    let sky_ambient = vec3<f32>(0.50, 0.50, 0.48) * sun.ambient;
+    let ground_ambient = vec3<f32>(0.30, 0.28, 0.25) * sun.ambient * 0.5;
     let ambient = mix(ground_ambient, sky_ambient, n.y * 0.5 + 0.5);
 
     let lit_color = in.color * (ambient + diffuse);
 
-    return vec4<f32>(lit_color, 1.0);
+    // Distance fog
+    let dist = distance(in.world_pos, camera.camera_pos);
+    let fog_factor = clamp((dist - FOG_START) / (FOG_END - FOG_START), 0.0, 1.0);
+    // Smooth the fog curve — quadratic feels more atmospheric than linear
+    let fog = fog_factor * fog_factor;
+
+    let final_color = mix(lit_color, FOG_COLOR, fog);
+
+    return vec4<f32>(final_color, 1.0);
 }
 
-// Sun disc shader — emissive, no lighting applied
+// Sun disc shader — emissive, fades into fog at distance
 @fragment
 fn fs_sun(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(in.color, 1.0);
+    // Hazy sun — blend towards fog color slightly so it looks diffused
+    let haze = mix(in.color, FOG_COLOR, 0.25);
+    return vec4<f32>(haze, 1.0);
 }
-
