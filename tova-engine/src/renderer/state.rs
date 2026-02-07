@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3};
+use glam::Vec3;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use super::camera::Camera;
-use super::vertex::{self, Vertex};
+use super::vertex::Vertex;
 use crate::voxel::{Chunk, VoxelMesher};
 
 #[repr(C)]
@@ -36,14 +36,7 @@ pub struct RenderState {
     pub sun_buffer: wgpu::Buffer,
     pub sun_bind_group: wgpu::BindGroup,
     pub chunk_meshes: Vec<ChunkMesh>,
-    // Sword
-    pub sword_pipeline: wgpu::RenderPipeline,
-    pub sword_vertex_buffer: wgpu::Buffer,
-    pub sword_index_buffer: wgpu::Buffer,
-    pub sword_num_indices: u32,
-    pub sword_camera_buffer: wgpu::Buffer,
-    pub sword_camera_bind_group: wgpu::BindGroup,
-    // Sun pixel position (screen-space)
+    // Sun disc
     pub sun_pixel_pipeline: wgpu::RenderPipeline,
     pub sun_pixel_vertex_buffer: wgpu::Buffer,
     pub sun_pixel_index_buffer: wgpu::Buffer,
@@ -225,74 +218,7 @@ impl RenderState {
             cache: None,
         });
 
-        // Sword pipeline (vs_sword + fs_sword) — separate camera bind group, clears depth
-        let sword_camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("sword_camera_buffer"),
-            contents: bytemuck::cast_slice(&[camera.build_view_proj()]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let sword_camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("sword_camera_bind_group"),
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: sword_camera_buffer.as_entire_binding(),
-            }],
-        });
-
-        let sword_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("sword_pipeline_layout"),
-            bind_group_layouts: &[&camera_bind_group_layout, &sun_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let sword_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("sword_pipeline"),
-            layout: Some(&sword_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_sword"),
-                buffers: &[Vertex::layout()],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_sword"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                ..Default::default()
-            },
-            depth_stencil: Some(depth_stencil.clone()),
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
-
-        // Sword geometry
-        let (sword_verts, sword_idx) = vertex::create_sword();
-        let sword_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("sword_vertex_buffer"),
-            contents: bytemuck::cast_slice(&sword_verts),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let sword_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("sword_index_buffer"),
-            contents: bytemuck::cast_slice(&sword_idx),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let sword_num_indices = sword_idx.len() as u32;
-
-        // Sun pixel — a small yellow quad rendered in screen space
+        // Sun disc camera
         let sun_pixel_camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("sun_pixel_camera_buffer"),
             contents: bytemuck::cast_slice(&[camera.build_view_proj()]),
@@ -392,12 +318,6 @@ impl RenderState {
             sun_buffer,
             sun_bind_group,
             chunk_meshes,
-            sword_pipeline,
-            sword_vertex_buffer,
-            sword_index_buffer,
-            sword_num_indices,
-            sword_camera_buffer,
-            sword_camera_bind_group,
             sun_pixel_pipeline,
             sun_pixel_vertex_buffer,
             sun_pixel_index_buffer,
@@ -421,24 +341,7 @@ impl RenderState {
         self.queue
             .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[uniform]));
 
-        // Sword camera: fixed position in lower-right, looking forward
-        let sword_view = Mat4::look_at_rh(
-            Vec3::new(0.25, -0.2, 0.0),  // offset to lower-right
-            Vec3::new(0.25, -0.2, -1.0),  // looking forward
-            Vec3::Y,
-        );
-        let sword_proj = Mat4::perspective_rh(45.0_f32.to_radians(), self.camera.aspect, 0.01, 10.0);
-        let sword_vp = sword_proj * sword_view;
-        let sword_uniform = super::camera::CameraUniform {
-            view_proj: sword_vp.to_cols_array_2d(),
-        };
-        self.queue.write_buffer(
-            &self.sword_camera_buffer,
-            0,
-            bytemuck::cast_slice(&[sword_uniform]),
-        );
-
-        // Sun pixel uses the world camera
+        // Sun disc uses the world camera
         self.queue.write_buffer(
             &self.sun_pixel_camera_buffer,
             0,
@@ -508,38 +411,6 @@ impl RenderState {
             render_pass.set_vertex_buffer(0, self.sun_pixel_vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.sun_pixel_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..6, 0, 0..1);
-        }
-
-        // Sword pass — clears depth so sword is always on top
-        {
-            let mut sword_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("sword_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load, // keep world render
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0), // clear depth for sword
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-            sword_pass.set_pipeline(&self.sword_pipeline);
-            sword_pass.set_bind_group(0, &self.sword_camera_bind_group, &[]);
-            sword_pass.set_bind_group(1, &self.sun_bind_group, &[]);
-            sword_pass.set_vertex_buffer(0, self.sword_vertex_buffer.slice(..));
-            sword_pass.set_index_buffer(self.sword_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            sword_pass.draw_indexed(0..self.sword_num_indices, 0, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
