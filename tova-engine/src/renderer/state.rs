@@ -307,16 +307,10 @@ impl RenderState {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        // Overlay pipeline — alpha blending, no depth, no bind groups
-        let overlay_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("overlay_pipeline_layout"),
-            bind_group_layouts: &[],
-            push_constant_ranges: &[],
-        });
-
+        // Overlay pipeline — alpha blending, no depth, uses same layout as world
         let overlay_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("overlay_pipeline"),
-            layout: Some(&overlay_pipeline_layout),
+            layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_overlay"),
@@ -501,6 +495,8 @@ impl RenderState {
             });
 
             overlay_pass.set_pipeline(&self.overlay_pipeline);
+            overlay_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            overlay_pass.set_bind_group(1, &self.sun_bind_group, &[]);
             overlay_pass.set_vertex_buffer(0, self.overlay_vertex_buffer.slice(..));
             overlay_pass.set_index_buffer(self.overlay_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             overlay_pass.draw_indexed(0..self.overlay_num_indices, 0, 0..1);
@@ -544,7 +540,7 @@ fn build_overlay_geometry(god_mode: bool) -> (Vec<Vertex>, Vec<u32>) {
     let mut indices = Vec::new();
 
     // Full-screen dark overlay — normal.x = alpha
-    let bg_alpha = [0.5_f32, 0.0, 0.0];
+    let bg_alpha = [0.65_f32, 0.0, 0.0];
     let bg_color = [0.0_f32, 0.0, 0.0];
     vertices.push(Vertex { position: [-1.0, -1.0, 0.0], color: bg_color, normal: bg_alpha });
     vertices.push(Vertex { position: [ 1.0, -1.0, 0.0], color: bg_color, normal: bg_alpha });
