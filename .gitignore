@@ -1,8 +1,4 @@
-node_modules/
 .DS_Store
-dist/
-build/
 .idea/
 .vscode/
 tova-engine/target/
-

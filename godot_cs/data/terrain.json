@@ -1,9 +1,0 @@
-{
-  "size": 500.0,
-  "segments": 128,
-  "valleyCenter": 0.0,
-  "valleyWidth": 140.0,
-  "valleyDepth": 18.0,
-  "valleyAxis": "x",
-  "enableShadows": true
-}
