@@ -15,6 +15,14 @@ use renderer::state::{BTN_BOTTOM, BTN_LEFT, BTN_RIGHT, BTN_TOP};
 use renderer::RenderState;
 use player::Input;
 
+fn rustc_version_label() -> &'static str {
+    option_env!("TOVA_RUSTC_VERSION").unwrap_or("rustc unknown")
+}
+
+fn rust_updated_at_label() -> &'static str {
+    option_env!("TOVA_RUST_UPDATED_AT").unwrap_or("unknown")
+}
+
 struct App {
     state: Option<RenderState>,
     input: Input,
@@ -68,7 +76,7 @@ impl App {
 
     fn update_title(&self) {
         if let Some(window) = &self.window {
-            let title = if self.typing_command {
+            let base = if self.typing_command {
                 format!("Tova — /{}", self.command_buffer)
             } else if self.paused {
                 let god = if self.god_mode { "ON" } else { "OFF" };
@@ -83,6 +91,11 @@ impl App {
                     format!("Tova — {}", flags.join(" | "))
                 }
             };
+            let title = format!(
+                "{base} | {} | updated {}",
+                rustc_version_label(),
+                rust_updated_at_label()
+            );
             window.set_title(&title);
         }
     }
@@ -161,6 +174,8 @@ impl ApplicationHandler for App {
             Ok(ambient) => self.ambient_audio = Some(ambient),
             Err(error) => log::warn!("Ambient wind disabled: {}", error),
         }
+
+        self.update_title();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -257,7 +272,7 @@ impl ApplicationHandler for App {
                             {
                                 // Toggle god mode
                                 self.god_mode = !self.god_mode;
-                                st.camera.speed = if self.god_mode { 60.0 } else { 20.0 };
+                                st.camera.speed = if self.god_mode { 90.0 } else { 30.0 };
                                 st.update_overlay(self.god_mode);
                                 self.update_title();
                             } else {
