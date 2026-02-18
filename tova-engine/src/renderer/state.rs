@@ -1,0 +1,595 @@
+use std::sync::Arc;
+use bytemuck::{Pod, Zeroable};
+use glam::Vec3;
+use wgpu::util::DeviceExt;
+use winit::window::Window;
+
+use super::camera::Camera;
+use super::vertex::Vertex;
+use crate::voxel::{Chunk, VoxelMesher};
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+pub struct SunUniform {
+    pub direction: [f32; 3],
+    pub fog_density: f32,
+    pub color: [f32; 3],
+    pub ambient: f32,
+}
+
+pub struct ChunkMesh {
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub num_indices: u32,
+}
+
+pub struct RenderState {
+    pub surface: wgpu::Surface<'static>,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub config: wgpu::SurfaceConfiguration,
+    pub size: winit::dpi::PhysicalSize<u32>,
+    pub render_pipeline: wgpu::RenderPipeline,
+    pub camera: Camera,
+    pub camera_buffer: wgpu::Buffer,
+    pub camera_bind_group: wgpu::BindGroup,
+    pub sun_buffer: wgpu::Buffer,
+    pub sun_bind_group: wgpu::BindGroup,
+    pub chunk_meshes: Vec<ChunkMesh>,
+    // Sun disc
+    pub sun_pixel_pipeline: wgpu::RenderPipeline,
+    pub sun_pixel_vertex_buffer: wgpu::Buffer,
+    pub sun_pixel_index_buffer: wgpu::Buffer,
+    pub sun_pixel_camera_buffer: wgpu::Buffer,
+    pub sun_pixel_camera_bind_group: wgpu::BindGroup,
+    // Overlay UI
+    pub overlay_pipeline: wgpu::RenderPipeline,
+    pub overlay_vertex_buffer: wgpu::Buffer,
+    pub overlay_index_buffer: wgpu::Buffer,
+    pub overlay_num_indices: u32,
+}
+
+impl RenderState {
+    pub async fn new(window: Arc<Window>) -> Self {
+        let size = window.inner_size();
+
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
+
+        let surface = instance.create_surface(window).unwrap();
+
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
+            .await
+            .unwrap();
+
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("tova_device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                ..Default::default()
+            }, None)
+            .await
+            .unwrap();
+
+        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .find(|f| f.is_srgb())
+            .copied()
+            .unwrap_or(surface_caps.formats[0]);
+
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: size.width,
+            height: size.height,
+            present_mode: wgpu::PresentMode::AutoVsync,
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        surface.configure(&device, &config);
+
+        // Camera
+        let camera = Camera::new(size.width as f32 / size.height as f32);
+        let camera_uniform = camera.build_view_proj();
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("camera_buffer"),
+            contents: bytemuck::cast_slice(&[camera_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("camera_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("camera_bind_group"),
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+        });
+
+        // Sun uniform — fog_density starts at 1.0 (fog on)
+        let sun_uniform = SunUniform {
+            direction: [0.4, 0.7, 0.2],
+            fog_density: 1.0,
+            color: [0.85, 0.80, 0.70],
+            ambient: 0.30,
+        };
+        let sun_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("sun_buffer"),
+            contents: bytemuck::cast_slice(&[sun_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let sun_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("sun_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let sun_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("sun_bind_group"),
+            layout: &sun_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: sun_buffer.as_entire_binding(),
+            }],
+        });
+
+        // Shader
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("shader"),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!("../../assets/shaders/shader.wgsl").into(),
+            ),
+        });
+
+        // Main world pipeline (vs_main + fs_main)
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("pipeline_layout"),
+            bind_group_layouts: &[&camera_bind_group_layout, &sun_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let depth_stencil = wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        };
+
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("world_pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Vertex::layout()],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(depth_stencil.clone()),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        // Sun disc camera
+        let sun_pixel_camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("sun_pixel_camera_buffer"),
+            contents: bytemuck::cast_slice(&[camera.build_view_proj()]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let sun_pixel_camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("sun_pixel_camera_bind_group"),
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: sun_pixel_camera_buffer.as_entire_binding(),
+            }],
+        });
+
+        // Sun pixel pipeline — no depth test, rendered on top
+        let sun_pixel_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("sun_pixel_pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Vertex::layout()],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_sun"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Always,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        // Sun disc — pale hazy disc, barely visible through overcast
+        let sun_dir = Vec3::new(0.4, 0.7, 0.2).normalize();
+        let sun_pos = sun_dir * 800.0;
+        let sun_size = 22.0_f32;
+        let sun_color = [0.82_f32, 0.78, 0.68];
+        let sun_normal = [0.0_f32, 0.0, 0.0];
+
+        let right = sun_dir.cross(Vec3::Y).normalize() * sun_size;
+        let up = sun_dir.cross(right).normalize() * sun_size;
+        let p = sun_pos;
+
+        let sun_verts = vec![
+            Vertex { position: (p - right - up).to_array(), color: sun_color, normal: sun_normal },
+            Vertex { position: (p + right - up).to_array(), color: sun_color, normal: sun_normal },
+            Vertex { position: (p + right + up).to_array(), color: sun_color, normal: sun_normal },
+            Vertex { position: (p - right + up).to_array(), color: sun_color, normal: sun_normal },
+        ];
+        let sun_idx: Vec<u32> = vec![0, 1, 2, 0, 2, 3];
+
+        let sun_pixel_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("sun_pixel_vertex_buffer"),
+            contents: bytemuck::cast_slice(&sun_verts),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let sun_pixel_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("sun_pixel_index_buffer"),
+            contents: bytemuck::cast_slice(&sun_idx),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        // Overlay pipeline — alpha blending, no depth, uses same layout as world
+        let overlay_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("overlay_pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_overlay"),
+                buffers: &[Vertex::layout()],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_overlay"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        let (overlay_verts, overlay_idx) = build_overlay_geometry(false);
+        let overlay_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("overlay_vertex_buffer"),
+            contents: bytemuck::cast_slice(&overlay_verts),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+        let overlay_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("overlay_index_buffer"),
+            contents: bytemuck::cast_slice(&overlay_idx),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let overlay_num_indices = overlay_idx.len() as u32;
+
+        // Generate voxel chunks
+        let chunk_meshes = generate_world_chunks(&device);
+
+        Self {
+            surface,
+            device,
+            queue,
+            config,
+            size,
+            render_pipeline,
+            camera,
+            camera_buffer,
+            camera_bind_group,
+            sun_buffer,
+            sun_bind_group,
+            chunk_meshes,
+            sun_pixel_pipeline,
+            sun_pixel_vertex_buffer,
+            sun_pixel_index_buffer,
+            sun_pixel_camera_buffer,
+            sun_pixel_camera_bind_group,
+            overlay_pipeline,
+            overlay_vertex_buffer,
+            overlay_index_buffer,
+            overlay_num_indices,
+        }
+    }
+
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            self.size = new_size;
+            self.config.width = new_size.width;
+            self.config.height = new_size.height;
+            self.surface.configure(&self.device, &self.config);
+            self.camera.aspect = new_size.width as f32 / new_size.height as f32;
+        }
+    }
+
+    pub fn update_camera(&mut self) {
+        let uniform = self.camera.build_view_proj();
+        self.queue
+            .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[uniform]));
+
+        // Sun disc uses the world camera
+        self.queue.write_buffer(
+            &self.sun_pixel_camera_buffer,
+            0,
+            bytemuck::cast_slice(&[uniform]),
+        );
+    }
+
+    pub fn set_fog(&mut self, enabled: bool) {
+        let density: f32 = if enabled { 1.0 } else { 0.0 };
+        // fog_density is at byte offset 12 in SunUniform (after direction [f32; 3])
+        self.queue.write_buffer(&self.sun_buffer, 12, bytemuck::cast_slice(&[density]));
+    }
+
+    pub fn update_overlay(&mut self, god_mode: bool) {
+        let (vertices, _indices) = build_overlay_geometry(god_mode);
+        self.queue.write_buffer(&self.overlay_vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+    }
+
+    pub fn render(&mut self, paused: bool) -> Result<(), wgpu::SurfaceError> {
+        let output = self.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let depth_texture = create_depth_texture(&self.device, &self.config);
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("render_encoder"),
+            });
+
+        // World pass — voxel chunks + sun pixel
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("world_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        // Overcast sky — matches FOG_COLOR in shader
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.62,
+                            g: 0.60,
+                            b: 0.56,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            // Draw voxel chunks
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sun_bind_group, &[]);
+
+            for chunk_mesh in &self.chunk_meshes {
+                render_pass.set_vertex_buffer(0, chunk_mesh.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(chunk_mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..chunk_mesh.num_indices, 0, 0..1);
+            }
+
+            // Draw sun pixel
+            render_pass.set_pipeline(&self.sun_pixel_pipeline);
+            render_pass.set_bind_group(0, &self.sun_pixel_camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sun_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.sun_pixel_vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.sun_pixel_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..6, 0, 0..1);
+        }
+
+        // Overlay pass — drawn on top of world when paused
+        if paused {
+            let mut overlay_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("overlay_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            overlay_pass.set_pipeline(&self.overlay_pipeline);
+            overlay_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            overlay_pass.set_bind_group(1, &self.sun_bind_group, &[]);
+            overlay_pass.set_vertex_buffer(0, self.overlay_vertex_buffer.slice(..));
+            overlay_pass.set_index_buffer(self.overlay_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            overlay_pass.draw_indexed(0..self.overlay_num_indices, 0, 0..1);
+        }
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
+
+        Ok(())
+    }
+}
+
+fn create_depth_texture(
+    device: &wgpu::Device,
+    config: &wgpu::SurfaceConfiguration,
+) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("depth_texture"),
+        size: wgpu::Extent3d {
+            width: config.width,
+            height: config.height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Depth32Float,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    })
+}
+
+// Button bounds in NDC — used for hit testing and geometry
+pub const BTN_LEFT: f32 = -0.25;
+pub const BTN_RIGHT: f32 = 0.25;
+pub const BTN_BOTTOM: f32 = -0.08;
+pub const BTN_TOP: f32 = 0.08;
+
+fn build_overlay_geometry(god_mode: bool) -> (Vec<Vertex>, Vec<u32>) {
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+
+    // Full-screen dark overlay — normal.x = alpha
+    let bg_alpha = [0.65_f32, 0.0, 0.0];
+    let bg_color = [0.0_f32, 0.0, 0.0];
+    vertices.push(Vertex { position: [-1.0, -1.0, 0.0], color: bg_color, normal: bg_alpha });
+    vertices.push(Vertex { position: [ 1.0, -1.0, 0.0], color: bg_color, normal: bg_alpha });
+    vertices.push(Vertex { position: [ 1.0,  1.0, 0.0], color: bg_color, normal: bg_alpha });
+    vertices.push(Vertex { position: [-1.0,  1.0, 0.0], color: bg_color, normal: bg_alpha });
+    indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
+
+    // God mode button — green when on, grey when off
+    let btn_color = if god_mode { [0.2_f32, 0.6, 0.3] } else { [0.35_f32, 0.35, 0.35] };
+    let btn_alpha = [0.85_f32, 0.0, 0.0];
+    let base = vertices.len() as u32;
+    vertices.push(Vertex { position: [BTN_LEFT,  BTN_BOTTOM, 0.0], color: btn_color, normal: btn_alpha });
+    vertices.push(Vertex { position: [BTN_RIGHT, BTN_BOTTOM, 0.0], color: btn_color, normal: btn_alpha });
+    vertices.push(Vertex { position: [BTN_RIGHT, BTN_TOP,    0.0], color: btn_color, normal: btn_alpha });
+    vertices.push(Vertex { position: [BTN_LEFT,  BTN_TOP,    0.0], color: btn_color, normal: btn_alpha });
+    indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+
+    (vertices, indices)
+}
+
+/// Generate a grid of voxel chunks and mesh them.
+fn generate_world_chunks(device: &wgpu::Device) -> Vec<ChunkMesh> {
+    let mut meshes = Vec::new();
+    let radius = 6_i32;
+
+    for cz in -radius..radius {
+        for cx in -radius..radius {
+            let mut chunk = Chunk::new(cx, cz);
+            chunk.generate_test();
+
+            if let Some((vertices, indices)) = VoxelMesher::build(&chunk) {
+                let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("chunk_vertex"),
+                    contents: bytemuck::cast_slice(&vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("chunk_index"),
+                    contents: bytemuck::cast_slice(&indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+                meshes.push(ChunkMesh {
+                    vertex_buffer,
+                    index_buffer,
+                    num_indices: indices.len() as u32,
+                });
+            }
+        }
+    }
+
+    meshes
+}
