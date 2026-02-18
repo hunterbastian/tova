@@ -1,6 +1,7 @@
 mod renderer;
 mod player;
 mod voxel;
+mod audio;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -27,6 +28,7 @@ struct App {
     typing_command: bool,
     command_buffer: String,
     mouse_pos: (f64, f64),
+    ambient_audio: Option<audio::AmbientAudio>,
 }
 
 impl App {
@@ -43,6 +45,7 @@ impl App {
             typing_command: false,
             command_buffer: String::new(),
             mouse_pos: (0.0, 0.0),
+            ambient_audio: None,
         }
     }
 
@@ -153,6 +156,11 @@ impl ApplicationHandler for App {
         let state = pollster::block_on(RenderState::new(window.clone()));
         self.state = Some(state);
         self.last_frame = Instant::now();
+
+        match audio::AmbientAudio::start() {
+            Ok(ambient) => self.ambient_audio = Some(ambient),
+            Err(error) => log::warn!("Ambient wind disabled: {}", error),
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
