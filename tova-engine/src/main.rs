@@ -27,6 +27,9 @@ struct App {
     state: Option<RenderState>,
     input: Input,
     last_frame: Instant,
+    fps_accum_seconds: f32,
+    fps_accum_frames: u32,
+    fps_display: f32,
     cursor_grabbed: bool,
     window: Option<Arc<Window>>,
     // Game state
@@ -45,6 +48,9 @@ impl App {
             state: None,
             input: Input::new(),
             last_frame: Instant::now(),
+            fps_accum_seconds: 0.0,
+            fps_accum_frames: 0,
+            fps_display: 0.0,
             cursor_grabbed: false,
             window: None,
             paused: false,
@@ -92,7 +98,8 @@ impl App {
                 }
             };
             let title = format!(
-                "{base} | {} | updated {}",
+                "{base} | FPS {:.1} | {} | updated {}",
+                self.fps_display,
                 rustc_version_label(),
                 rust_updated_at_label()
             );
@@ -292,6 +299,16 @@ impl ApplicationHandler for App {
                 let now = Instant::now();
                 let dt = (now - self.last_frame).as_secs_f32();
                 self.last_frame = now;
+                self.fps_accum_seconds += dt;
+                self.fps_accum_frames += 1;
+                if self.fps_accum_seconds >= 1.0 {
+                    let fps = self.fps_accum_frames as f32 / self.fps_accum_seconds.max(f32::EPSILON);
+                    log::info!("FPS: {:.1}", fps);
+                    self.fps_display = fps;
+                    self.update_title();
+                    self.fps_accum_seconds = 0.0;
+                    self.fps_accum_frames = 0;
+                }
 
                 if let Some(state) = &mut self.state {
                     // Only move when playing

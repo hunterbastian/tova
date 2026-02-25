@@ -1,5 +1,9 @@
 # Changelog
 
+## This Week — 2026-02-18
+- Captured a Rust-engine baseline before cleanup to preserve a stable checkpoint for upcoming refactors.
+- Added procedural ambient wind audio via a new `audio` module (`rodio`), with graceful fallback when no output device is available.
+
 ## This Week — 2026-02-05
 - Added a shareable "moment link" flow that deep-links camera position/view/time-of-day with open/click analytics events.
 - Added an app summary PDF and a roadmap PDF to support planning and project communication.

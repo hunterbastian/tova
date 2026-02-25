@@ -31,7 +31,7 @@ impl Camera {
             fov_y: 70.0_f32.to_radians(),
             z_near: 0.1,
             z_far: 1000.0,
-            speed: 20.0,
+            speed: 30.0,
             sensitivity: 0.003,
         }
     }

@@ -52,22 +52,21 @@ pub struct RenderState {
 impl RenderState {
     pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
-
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-
-        let surface = instance.create_surface(window).unwrap();
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .unwrap();
+        let (surface, adapter) =
+            match request_surface_and_adapter(window.clone(), wgpu::Backends::VULKAN).await {
+                Some(ok) => ok,
+                None => {
+                    eprintln!("Vulkan backend unavailable. Falling back to all backends.");
+                    request_surface_and_adapter(window, wgpu::Backends::all())
+                        .await
+                        .expect("Failed to find a GPU adapter with fallback backends")
+                }
+            };
+        let adapter_info = adapter.get_info();
+        println!(
+            "Using {:?} backend on adapter '{}'",
+            adapter_info.backend, adapter_info.name
+        );
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -92,7 +91,7 @@ impl RenderState {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::AutoVsync,
+            present_mode: wgpu::PresentMode::AutoNoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
@@ -507,6 +506,25 @@ impl RenderState {
 
         Ok(())
     }
+}
+
+async fn request_surface_and_adapter(
+    window: Arc<Window>,
+    backends: wgpu::Backends,
+) -> Option<(wgpu::Surface<'static>, wgpu::Adapter)> {
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        backends,
+        ..Default::default()
+    });
+    let surface = instance.create_surface(window).expect("Failed to create surface");
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
+        })
+        .await?;
+    Some((surface, adapter))
 }
 
 fn create_depth_texture(
