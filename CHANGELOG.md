@@ -1,5 +1,13 @@
 # Changelog
 
+## This Week — 2026-02-27
+- Reworked the renderer into a staged pipeline (`shadow -> world -> post -> overlay`) with split WGSL shaders and quality presets (`Low/Medium/High/Ultra`).
+- Added a title screen and pause overlay flow, plus runtime graphics controls (`F6` preset cycle, `F7` shader pack toggle, `F8` vsync toggle).
+- Added soundtrack playlist support from `assets/music` (and `TOVA_MUSIC_DIR`) while keeping procedural ambient wind fallback.
+- Upgraded meshing with greedy merged quads and cross-chunk face culling to reduce geometry cost.
+- Replaced test terrain with seeded procedural world generation (biomes, caves, water fill) and `TOVA_WORLD_SEED` override.
+- Fixed post-process binding/runtime issues on Metal and improved backend startup fallback behavior.
+
 ## This Week — 2026-02-18
 - Captured a Rust-engine baseline before cleanup to preserve a stable checkpoint for upcoming refactors.
 - Added procedural ambient wind audio via a new `audio` module (`rodio`), with graceful fallback when no output device is available.

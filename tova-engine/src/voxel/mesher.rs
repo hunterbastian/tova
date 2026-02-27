@@ -2,99 +2,87 @@ use super::block::{Block, BLOCK_COLORS};
 use super::chunk::{Chunk, CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT};
 use crate::renderer::Vertex;
 
-/// Face definitions: normal, neighbor offset, 4 corner positions.
-/// Shade values per face match Minecraft's directional lighting:
-/// Top=1.0, Bottom=0.5, North/South=0.8, East/West=0.6
-struct FaceDef {
-    normal: [f32; 3],
-    offset: [i32; 3],
-    corners: [[i32; 3]; 4],
-    shade: f32,
-    /// For each corner, the 3 neighbors to check for ambient occlusion.
-    /// Each is relative to the face's base block position.
-    ao_neighbors: [[[i32; 3]; 3]; 4],
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FaceCell {
+    block: Block,
+    x: usize,
+    y: usize,
+    z: usize,
 }
 
-const FACES: [FaceDef; 6] = [
-    // +X (East) — shade 0.6
-    FaceDef {
-        normal: [1.0, 0.0, 0.0],
-        offset: [1, 0, 0],
-        corners: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]],
-        shade: 0.6,
-        ao_neighbors: [
-            [[1, -1, 0], [1, 0, -1], [1, -1, -1]], // corner 0: bottom-back
-            [[1, 1, 0],  [1, 0, -1], [1, 1, -1]],  // corner 1: top-back
-            [[1, 1, 0],  [1, 0, 1],  [1, 1, 1]],   // corner 2: top-front
-            [[1, -1, 0], [1, 0, 1],  [1, -1, 1]],  // corner 3: bottom-front
-        ],
-    },
-    // -X (West) — shade 0.6
-    FaceDef {
-        normal: [-1.0, 0.0, 0.0],
-        offset: [-1, 0, 0],
-        corners: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]],
-        shade: 0.6,
-        ao_neighbors: [
-            [[-1, -1, 0], [-1, 0, 1],  [-1, -1, 1]],
-            [[-1, 1, 0],  [-1, 0, 1],  [-1, 1, 1]],
-            [[-1, 1, 0],  [-1, 0, -1], [-1, 1, -1]],
-            [[-1, -1, 0], [-1, 0, -1], [-1, -1, -1]],
-        ],
-    },
-    // +Y (Top) — shade 1.0
-    FaceDef {
-        normal: [0.0, 1.0, 0.0],
-        offset: [0, 1, 0],
-        corners: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]],
-        shade: 1.0,
-        ao_neighbors: [
-            [[0, 1, 1],  [-1, 1, 0], [-1, 1, 1]],
-            [[0, 1, 1],  [1, 1, 0],  [1, 1, 1]],
-            [[0, 1, -1], [1, 1, 0],  [1, 1, -1]],
-            [[0, 1, -1], [-1, 1, 0], [-1, 1, -1]],
-        ],
-    },
-    // -Y (Bottom) — shade 0.5
-    FaceDef {
-        normal: [0.0, -1.0, 0.0],
-        offset: [0, -1, 0],
-        corners: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]],
-        shade: 0.5,
-        ao_neighbors: [
-            [[0, -1, -1], [-1, -1, 0], [-1, -1, -1]],
-            [[0, -1, -1], [1, -1, 0],  [1, -1, -1]],
-            [[0, -1, 1],  [1, -1, 0],  [1, -1, 1]],
-            [[0, -1, 1],  [-1, -1, 0], [-1, -1, 1]],
-        ],
-    },
-    // +Z (South) — shade 0.8
-    FaceDef {
-        normal: [0.0, 0.0, 1.0],
-        offset: [0, 0, 1],
-        corners: [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]],
-        shade: 0.8,
-        ao_neighbors: [
-            [[1, 0, 1],  [0, -1, 1], [1, -1, 1]],
-            [[1, 0, 1],  [0, 1, 1],  [1, 1, 1]],
-            [[-1, 0, 1], [0, 1, 1],  [-1, 1, 1]],
-            [[-1, 0, 1], [0, -1, 1], [-1, -1, 1]],
-        ],
-    },
-    // -Z (North) — shade 0.8
-    FaceDef {
-        normal: [0.0, 0.0, -1.0],
-        offset: [0, 0, -1],
-        corners: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]],
-        shade: 0.8,
-        ao_neighbors: [
-            [[-1, 0, -1], [0, -1, -1], [-1, -1, -1]],
-            [[-1, 0, -1], [0, 1, -1],  [-1, 1, -1]],
-            [[1, 0, -1],  [0, 1, -1],  [1, 1, -1]],
-            [[1, 0, -1],  [0, -1, -1], [1, -1, -1]],
-        ],
-    },
-];
+#[derive(Clone, Copy, Debug)]
+enum FaceDir {
+    Px,
+    Nx,
+    Py,
+    Ny,
+    Pz,
+    Nz,
+}
+
+impl FaceDir {
+    const ALL: [Self; 6] = [Self::Px, Self::Nx, Self::Py, Self::Ny, Self::Pz, Self::Nz];
+
+    fn normal(self) -> [f32; 3] {
+        match self {
+            Self::Px => [1.0, 0.0, 0.0],
+            Self::Nx => [-1.0, 0.0, 0.0],
+            Self::Py => [0.0, 1.0, 0.0],
+            Self::Ny => [0.0, -1.0, 0.0],
+            Self::Pz => [0.0, 0.0, 1.0],
+            Self::Nz => [0.0, 0.0, -1.0],
+        }
+    }
+
+    fn offset(self) -> [i32; 3] {
+        match self {
+            Self::Px => [1, 0, 0],
+            Self::Nx => [-1, 0, 0],
+            Self::Py => [0, 1, 0],
+            Self::Ny => [0, -1, 0],
+            Self::Pz => [0, 0, 1],
+            Self::Nz => [0, 0, -1],
+        }
+    }
+
+    fn shade(self) -> f32 {
+        match self {
+            Self::Px | Self::Nx => 0.6,
+            Self::Py => 1.0,
+            Self::Ny => 0.5,
+            Self::Pz | Self::Nz => 0.8,
+        }
+    }
+
+    fn slice_count(self) -> usize {
+        match self {
+            Self::Px | Self::Nx | Self::Pz | Self::Nz => CHUNK_SIZE,
+            Self::Py | Self::Ny => WORLD_HEIGHT,
+        }
+    }
+
+    fn u_count(self) -> usize {
+        match self {
+            Self::Px | Self::Nx => WORLD_HEIGHT,
+            Self::Py | Self::Ny | Self::Pz | Self::Nz => CHUNK_SIZE,
+        }
+    }
+
+    fn v_count(self) -> usize {
+        match self {
+            Self::Px | Self::Nx | Self::Py | Self::Ny => CHUNK_SIZE,
+            Self::Pz | Self::Nz => WORLD_HEIGHT,
+        }
+    }
+
+    fn block_coords(self, slice: usize, u: usize, v: usize) -> (usize, usize, usize) {
+        match self {
+            Self::Px | Self::Nx => (slice, u, v),
+            Self::Py | Self::Ny => (u, slice, v),
+            Self::Pz | Self::Nz => (u, v, slice),
+        }
+    }
+}
 
 fn should_render_face(current: Block, neighbor: Block) -> bool {
     if current == Block::Air {
@@ -106,111 +94,111 @@ fn should_render_face(current: Block, neighbor: Block) -> bool {
     neighbor == Block::Air || neighbor == Block::Water
 }
 
-/// Compute ambient occlusion for a corner (0-3 scale).
-/// 0 = fully occluded (darkest), 3 = fully open (brightest).
-fn compute_ao(side1: bool, side2: bool, corner: bool) -> u8 {
-    if side1 && side2 {
-        return 0;
-    }
-    3 - (side1 as u8 + side2 as u8 + corner as u8)
-}
-
-/// Map AO value (0-3) to a brightness multiplier.
-fn ao_brightness(ao: u8) -> f32 {
-    match ao {
-        0 => 0.5,
-        1 => 0.65,
-        2 => 0.8,
-        _ => 1.0,
-    }
-}
-
 pub struct VoxelMesher;
 
 impl VoxelMesher {
-    /// Build vertex + index buffers for a chunk. Returns None if empty.
-    pub fn build(chunk: &Chunk) -> Option<(Vec<Vertex>, Vec<u32>)> {
+    /// Meshing using an external block lookup for cross-chunk culling.
+    pub fn build_with_lookup<F>(
+        chunk: &Chunk,
+        mut sample_block: F,
+    ) -> Option<(Vec<Vertex>, Vec<u32>)>
+    where
+        F: FnMut(i32, i32, i32) -> Block,
+    {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
         let base_x = chunk.cx * CHUNK_SIZE as i32;
         let base_z = chunk.cz * CHUNK_SIZE as i32;
 
-        for y in 0..WORLD_HEIGHT {
-            for lz in 0..CHUNK_SIZE {
-                for lx in 0..CHUNK_SIZE {
-                    let block = chunk.get(lx, y, lz);
-                    if block == Block::Air {
-                        continue;
-                    }
+        for face in FaceDir::ALL {
+            let slice_count = face.slice_count();
+            let u_count = face.u_count();
+            let v_count = face.v_count();
+            let cell_count = u_count * v_count;
+            let mut mask = vec![None; cell_count];
+            let mut visited = vec![false; cell_count];
 
-                    let wx = base_x + lx as i32;
-                    let wz = base_z + lz as i32;
+            for slice in 0..slice_count {
+                mask.fill(None);
+                visited.fill(false);
 
-                    // Altitude tint
-                    let altitude = (0.88 + (y as f32 - SEA_LEVEL as f32) * 0.004).clamp(0.7, 1.15);
-                    let base_color = BLOCK_COLORS[block as usize];
-
-                    for face in &FACES {
-                        let nx = wx + face.offset[0];
-                        let ny = y as i32 + face.offset[1];
-                        let nz = wz + face.offset[2];
-
-                        let neighbor = get_block_world(chunk, nx, ny, nz);
-                        if !should_render_face(block, neighbor) {
+                for u in 0..u_count {
+                    for v in 0..v_count {
+                        let idx = u * v_count + v;
+                        let (lx, ly, lz) = face.block_coords(slice, u, v);
+                        let block = chunk.get(lx, ly, lz);
+                        if block == Block::Air {
                             continue;
                         }
 
-                        // Compute AO for each of the 4 corners
-                        let mut ao_values = [3u8; 4];
-                        for (ci, ao_nbrs) in face.ao_neighbors.iter().enumerate() {
-                            let s1 = is_solid_at(chunk, wx + ao_nbrs[0][0], y as i32 + ao_nbrs[0][1], wz + ao_nbrs[0][2]);
-                            let s2 = is_solid_at(chunk, wx + ao_nbrs[1][0], y as i32 + ao_nbrs[1][1], wz + ao_nbrs[1][2]);
-                            let cr = is_solid_at(chunk, wx + ao_nbrs[2][0], y as i32 + ao_nbrs[2][1], wz + ao_nbrs[2][2]);
-                            ao_values[ci] = compute_ao(s1, s2, cr);
-                        }
-
-                        let base_idx = vertices.len() as u32;
-
-                        for (ci, corner) in face.corners.iter().enumerate() {
-                            let ao = ao_brightness(ao_values[ci]);
-                            let shade = face.shade * altitude * ao;
-
-                            vertices.push(Vertex {
-                                position: [
-                                    (wx + corner[0]) as f32,
-                                    (y as i32 + corner[1]) as f32,
-                                    (wz + corner[2]) as f32,
-                                ],
-                                color: [
-                                    (base_color[0] * shade).min(1.0),
-                                    (base_color[1] * shade).min(1.0),
-                                    (base_color[2] * shade).min(1.0),
-                                ],
-                                normal: face.normal,
+                        let wx = base_x + lx as i32;
+                        let wy = ly as i32;
+                        let wz = base_z + lz as i32;
+                        let [ox, oy, oz] = face.offset();
+                        let neighbor = sample_block(wx + ox, wy + oy, wz + oz);
+                        if should_render_face(block, neighbor) {
+                            mask[idx] = Some(FaceCell {
+                                block,
+                                x: lx,
+                                y: ly,
+                                z: lz,
                             });
                         }
+                    }
+                }
 
-                        // Flip quad diagonal if AO is anisotropic — prevents ugly diagonal artifacts
-                        if ao_values[0] + ao_values[2] > ao_values[1] + ao_values[3] {
-                            indices.extend_from_slice(&[
-                                base_idx,
-                                base_idx + 1,
-                                base_idx + 2,
-                                base_idx,
-                                base_idx + 2,
-                                base_idx + 3,
-                            ]);
-                        } else {
-                            indices.extend_from_slice(&[
-                                base_idx + 1,
-                                base_idx + 2,
-                                base_idx + 3,
-                                base_idx + 1,
-                                base_idx + 3,
-                                base_idx,
-                            ]);
+                for u in 0..u_count {
+                    for v in 0..v_count {
+                        let idx = u * v_count + v;
+                        if visited[idx] {
+                            continue;
                         }
+                        let Some(cell) = mask[idx] else {
+                            continue;
+                        };
+
+                        let mut width = 1;
+                        while v + width < v_count {
+                            let next_idx = u * v_count + (v + width);
+                            if visited[next_idx] {
+                                break;
+                            }
+                            match mask[next_idx] {
+                                Some(other) if other.block == cell.block => width += 1,
+                                _ => break,
+                            }
+                        }
+
+                        let mut height = 1;
+                        'grow_height: while u + height < u_count {
+                            for dv in 0..width {
+                                let next_idx = (u + height) * v_count + (v + dv);
+                                if visited[next_idx] {
+                                    break 'grow_height;
+                                }
+                                match mask[next_idx] {
+                                    Some(other) if other.block == cell.block => {}
+                                    _ => break 'grow_height,
+                                }
+                            }
+                            height += 1;
+                        }
+
+                        for du in 0..height {
+                            for dv in 0..width {
+                                visited[(u + du) * v_count + (v + dv)] = true;
+                            }
+                        }
+
+                        emit_merged_face(
+                            &mut vertices,
+                            &mut indices,
+                            face,
+                            cell,
+                            width as f32,
+                            height as f32,
+                        );
                     }
                 }
             }
@@ -224,24 +212,100 @@ impl VoxelMesher {
     }
 }
 
-/// Check if block at world coords is solid (for AO).
-fn is_solid_at(chunk: &Chunk, wx: i32, wy: i32, wz: i32) -> bool {
-    let block = get_block_world(chunk, wx, wy, wz);
-    block.is_solid()
+fn emit_merged_face(
+    vertices: &mut Vec<Vertex>,
+    indices: &mut Vec<u32>,
+    face: FaceDir,
+    cell: FaceCell,
+    width: f32,
+    height: f32,
+) {
+    let x = cell.x as f32;
+    let y = cell.y as f32;
+    let z = cell.z as f32;
+
+    let positions = match face {
+        FaceDir::Px => [
+            [x + 1.0, y, z],
+            [x + 1.0, y + height, z],
+            [x + 1.0, y + height, z + width],
+            [x + 1.0, y, z + width],
+        ],
+        FaceDir::Nx => [
+            [x, y, z + width],
+            [x, y + height, z + width],
+            [x, y + height, z],
+            [x, y, z],
+        ],
+        FaceDir::Py => [
+            [x, y + 1.0, z + width],
+            [x + height, y + 1.0, z + width],
+            [x + height, y + 1.0, z],
+            [x, y + 1.0, z],
+        ],
+        FaceDir::Ny => [
+            [x, y, z],
+            [x + height, y, z],
+            [x + height, y, z + width],
+            [x, y, z + width],
+        ],
+        FaceDir::Pz => [
+            [x + height, y, z + 1.0],
+            [x + height, y + width, z + 1.0],
+            [x, y + width, z + 1.0],
+            [x, y, z + 1.0],
+        ],
+        FaceDir::Nz => [
+            [x, y, z],
+            [x, y + width, z],
+            [x + height, y + width, z],
+            [x + height, y, z],
+        ],
+    };
+
+    push_quad(
+        vertices,
+        indices,
+        positions,
+        face.normal(),
+        cell.block,
+        face.shade(),
+    );
 }
 
-/// Get block at world coordinates. For blocks outside this chunk, treat as air.
-fn get_block_world(chunk: &Chunk, wx: i32, wy: i32, wz: i32) -> Block {
-    if wy < 0 || wy >= WORLD_HEIGHT as i32 {
-        return Block::Air;
+fn push_quad(
+    vertices: &mut Vec<Vertex>,
+    indices: &mut Vec<u32>,
+    positions: [[f32; 3]; 4],
+    normal: [f32; 3],
+    block: Block,
+    face_shade: f32,
+) {
+    let base_idx = vertices.len() as u32;
+    for position in positions {
+        vertices.push(Vertex {
+            position,
+            color: compute_face_color(block, face_shade, position[1]),
+            normal,
+        });
     }
+    indices.extend_from_slice(&[
+        base_idx,
+        base_idx + 1,
+        base_idx + 2,
+        base_idx,
+        base_idx + 2,
+        base_idx + 3,
+    ]);
+}
 
-    let lx = wx - chunk.cx * CHUNK_SIZE as i32;
-    let lz = wz - chunk.cz * CHUNK_SIZE as i32;
-
-    if lx < 0 || lx >= CHUNK_SIZE as i32 || lz < 0 || lz >= CHUNK_SIZE as i32 {
-        return Block::Air;
-    }
-
-    chunk.get(lx as usize, wy as usize, lz as usize)
+fn compute_face_color(block: Block, face_shade: f32, y: f32) -> [f32; 3] {
+    let altitude = (0.88 + (y - SEA_LEVEL as f32) * 0.004).clamp(0.7, 1.15);
+    let shade = face_shade * altitude;
+    let base = BLOCK_COLORS[block as usize];
+    [
+        (base[0] * shade).min(1.0),
+        (base[1] * shade).min(1.0),
+        (base[2] * shade).min(1.0),
+    ]
 }

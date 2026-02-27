@@ -1,19 +1,20 @@
-mod renderer;
-mod player;
-mod voxel;
 mod audio;
+mod player;
+mod renderer;
+mod voxel;
 
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
-use winit::event::{DeviceEvent, ElementState, KeyEvent, WindowEvent};
+use winit::event::{DeviceEvent, ElementState, KeyEvent, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
 
-use renderer::state::{BTN_BOTTOM, BTN_LEFT, BTN_RIGHT, BTN_TOP};
-use renderer::RenderState;
 use player::Input;
+use renderer::camera::MoveIntent;
+use renderer::state::{OverlayMode, BTN_BOTTOM, BTN_LEFT, BTN_RIGHT, BTN_TOP};
+use renderer::RenderState;
 
 fn rustc_version_label() -> &'static str {
     option_env!("TOVA_RUSTC_VERSION").unwrap_or("rustc unknown")
@@ -33,6 +34,7 @@ struct App {
     cursor_grabbed: bool,
     window: Option<Arc<Window>>,
     // Game state
+    title_screen: bool,
     paused: bool,
     god_mode: bool,
     fog_enabled: bool,
@@ -53,6 +55,7 @@ impl App {
             fps_display: 0.0,
             cursor_grabbed: false,
             window: None,
+            title_screen: true,
             paused: false,
             god_mode: false,
             fog_enabled: true,
@@ -65,7 +68,8 @@ impl App {
 
     fn grab_cursor(&mut self) {
         if let Some(window) = &self.window {
-            let _ = window.set_cursor_grab(CursorGrabMode::Locked)
+            let _ = window
+                .set_cursor_grab(CursorGrabMode::Locked)
                 .or_else(|_| window.set_cursor_grab(CursorGrabMode::Confined));
             window.set_cursor_visible(false);
             self.cursor_grabbed = true;
@@ -82,15 +86,39 @@ impl App {
 
     fn update_title(&self) {
         if let Some(window) = &self.window {
-            let base = if self.typing_command {
+            let (quality_label, shader_pack_label, vsync_label) = if let Some(state) = &self.state {
+                let settings = state.settings();
+                (
+                    settings.preset.label(),
+                    if settings.shader_pack_enabled {
+                        "Shaders ON"
+                    } else {
+                        "Shaders OFF"
+                    },
+                    if settings.vsync {
+                        "VSync ON"
+                    } else {
+                        "VSync OFF"
+                    },
+                )
+            } else {
+                ("--", "Shaders --", "VSync --")
+            };
+            let base = if self.title_screen {
+                "Tova — TITLE SCREEN | Press Enter or Click to Start".to_string()
+            } else if self.typing_command {
                 format!("Tova — /{}", self.command_buffer)
             } else if self.paused {
                 let god = if self.god_mode { "ON" } else { "OFF" };
                 format!("Tova — PAUSED | God Mode: {}", god)
             } else {
                 let mut flags = Vec::new();
-                if self.god_mode { flags.push("GOD"); }
-                if !self.fog_enabled { flags.push("NO FOG"); }
+                if self.god_mode {
+                    flags.push("GOD");
+                }
+                if !self.fog_enabled {
+                    flags.push("NO FOG");
+                }
                 if flags.is_empty() {
                     "Tova".to_string()
                 } else {
@@ -98,13 +126,29 @@ impl App {
                 }
             };
             let title = format!(
-                "{base} | FPS {:.1} | {} | updated {}",
+                "{base} | FPS {:.1} | {} | {} | {} | {} | updated {}",
                 self.fps_display,
+                quality_label,
+                shader_pack_label,
+                vsync_label,
                 rustc_version_label(),
                 rust_updated_at_label()
             );
             window.set_title(&title);
         }
+    }
+
+    fn start_game_from_title(&mut self) {
+        self.title_screen = false;
+        self.paused = false;
+        self.typing_command = false;
+        self.command_buffer.clear();
+        self.last_frame = Instant::now();
+        self.grab_cursor();
+        if let Some(state) = &mut self.state {
+            state.set_overlay_mode(OverlayMode::None);
+        }
+        self.update_title();
     }
 
     fn execute_command(&mut self) {
@@ -175,7 +219,11 @@ impl ApplicationHandler for App {
 
         let state = pollster::block_on(RenderState::new(window.clone()));
         self.state = Some(state);
+        if let Some(state) = &mut self.state {
+            state.set_overlay_mode(OverlayMode::Title);
+        }
         self.last_frame = Instant::now();
+        self.release_cursor();
 
         match audio::AmbientAudio::start() {
             Ok(ambient) => self.ambient_audio = Some(ambient),
@@ -234,16 +282,55 @@ impl ApplicationHandler for App {
                                     }
                                 }
                             }
+                        } else if key == KeyCode::F6 {
+                            if let Some(state) = &mut self.state {
+                                let next = state.settings().preset.next();
+                                state.set_quality_preset(next);
+                                state.camera.speed = if self.god_mode { 90.0 } else { 30.0 };
+                                log::info!("Quality preset set to {}", next.label());
+                            }
+                            self.update_title();
+                        } else if key == KeyCode::F7 {
+                            if let Some(state) = &mut self.state {
+                                let enabled = !state.settings().shader_pack_enabled;
+                                state.set_shader_pack_enabled(enabled);
+                                log::info!(
+                                    "Shader pack {}",
+                                    if enabled { "enabled" } else { "disabled" }
+                                );
+                            }
+                            self.update_title();
+                        } else if key == KeyCode::F8 {
+                            if let Some(state) = &mut self.state {
+                                let enabled = !state.settings().vsync;
+                                state.set_vsync(enabled);
+                                log::info!(
+                                    "VSync {}",
+                                    if enabled { "enabled" } else { "disabled" }
+                                );
+                            }
+                            self.update_title();
+                        } else if self.title_screen {
+                            if key == KeyCode::Enter || key == KeyCode::Space {
+                                self.start_game_from_title();
+                            } else if key == KeyCode::Escape {
+                                event_loop.exit();
+                            }
                         } else if key == KeyCode::Escape {
                             // Toggle pause
                             self.paused = !self.paused;
                             if self.paused {
                                 self.release_cursor();
                                 if let Some(state) = &mut self.state {
-                                    state.update_overlay(self.god_mode);
+                                    state.set_overlay_mode(OverlayMode::Pause {
+                                        god_mode: self.god_mode,
+                                    });
                                 }
                             } else {
                                 self.grab_cursor();
+                                if let Some(state) = &mut self.state {
+                                    state.set_overlay_mode(OverlayMode::None);
+                                }
                             }
                             self.update_title();
                         } else if key == KeyCode::Slash && self.cursor_grabbed && !self.paused {
@@ -263,10 +350,14 @@ impl ApplicationHandler for App {
 
             WindowEvent::MouseInput {
                 state: ElementState::Pressed,
+                button: MouseButton::Left,
                 ..
             } => {
-                if self.paused {
+                if self.title_screen {
+                    self.start_game_from_title();
+                } else if self.paused {
                     // Check if click is on the god mode button
+                    let mut should_resume = false;
                     if let Some(st) = &mut self.state {
                         let w = st.size.width as f64;
                         let h = st.size.height as f64;
@@ -274,21 +365,29 @@ impl ApplicationHandler for App {
                             let ndc_x = (self.mouse_pos.0 / w) * 2.0 - 1.0;
                             let ndc_y = 1.0 - (self.mouse_pos.1 / h) * 2.0;
 
-                            if ndc_x >= BTN_LEFT as f64 && ndc_x <= BTN_RIGHT as f64
-                                && ndc_y >= BTN_BOTTOM as f64 && ndc_y <= BTN_TOP as f64
+                            if ndc_x >= BTN_LEFT as f64
+                                && ndc_x <= BTN_RIGHT as f64
+                                && ndc_y >= BTN_BOTTOM as f64
+                                && ndc_y <= BTN_TOP as f64
                             {
                                 // Toggle god mode
                                 self.god_mode = !self.god_mode;
                                 st.camera.speed = if self.god_mode { 90.0 } else { 30.0 };
-                                st.update_overlay(self.god_mode);
+                                st.set_overlay_mode(OverlayMode::Pause {
+                                    god_mode: self.god_mode,
+                                });
                                 self.update_title();
                             } else {
                                 // Click outside button — resume
                                 self.paused = false;
-                                self.grab_cursor();
-                                self.update_title();
+                                st.set_overlay_mode(OverlayMode::None);
+                                should_resume = true;
                             }
                         }
+                    }
+                    if should_resume {
+                        self.grab_cursor();
+                        self.update_title();
                     }
                 } else if !self.cursor_grabbed {
                     self.grab_cursor();
@@ -302,7 +401,8 @@ impl ApplicationHandler for App {
                 self.fps_accum_seconds += dt;
                 self.fps_accum_frames += 1;
                 if self.fps_accum_seconds >= 1.0 {
-                    let fps = self.fps_accum_frames as f32 / self.fps_accum_seconds.max(f32::EPSILON);
+                    let fps =
+                        self.fps_accum_frames as f32 / self.fps_accum_seconds.max(f32::EPSILON);
                     log::info!("FPS: {:.1}", fps);
                     self.fps_display = fps;
                     self.update_title();
@@ -312,30 +412,28 @@ impl ApplicationHandler for App {
 
                 if let Some(state) = &mut self.state {
                     // Only move when playing
-                    if !self.paused && !self.typing_command {
+                    if !self.title_screen && !self.paused && !self.typing_command {
                         state.camera.fly_move(
                             dt,
-                            self.input.forward(),
-                            self.input.back(),
-                            self.input.left(),
-                            self.input.right(),
-                            self.input.up(),
-                            self.input.down(),
+                            MoveIntent {
+                                forward: self.input.forward(),
+                                back: self.input.back(),
+                                left: self.input.left(),
+                                right: self.input.right(),
+                                up: self.input.up(),
+                                down: self.input.down(),
+                            },
                         );
                     }
 
-                    state.update_camera();
+                    state.update(dt);
 
-                    match state.render(self.paused) {
+                    match state.render(self.paused || self.title_screen) {
                         Ok(_) => {}
                         Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
                         Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
                         Err(e) => log::error!("Render error: {:?}", e),
                     }
-                }
-
-                if let Some(window) = &self.window {
-                    window.request_redraw();
                 }
             }
 
@@ -350,7 +448,7 @@ impl ApplicationHandler for App {
         event: DeviceEvent,
     ) {
         if let DeviceEvent::MouseMotion { delta: (dx, dy) } = event {
-            if self.cursor_grabbed && !self.paused {
+            if self.cursor_grabbed && !self.title_screen && !self.paused && !self.typing_command {
                 if let Some(state) = &mut self.state {
                     state.camera.rotate(dx, dy);
                 }

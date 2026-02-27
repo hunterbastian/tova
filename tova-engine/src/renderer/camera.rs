@@ -12,13 +12,23 @@ pub struct CameraUniform {
 pub struct Camera {
     pub position: Vec3,
     pub yaw: f32,   // radians, 0 = looking along -Z
-    pub pitch: f32,  // radians, clamped to [-89°, 89°]
+    pub pitch: f32, // radians, clamped to [-89°, 89°]
     pub aspect: f32,
-    pub fov_y: f32,  // radians
+    pub fov_y: f32, // radians
     pub z_near: f32,
     pub z_far: f32,
     pub speed: f32,
     pub sensitivity: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MoveIntent {
+    pub forward: bool,
+    pub back: bool,
+    pub left: bool,
+    pub right: bool,
+    pub up: bool,
+    pub down: bool,
 }
 
 impl Camera {
@@ -46,11 +56,6 @@ impl Camera {
         .normalize()
     }
 
-    /// Horizontal forward (for walking movement — no Y component).
-    pub fn forward_flat(&self) -> Vec3 {
-        Vec3::new(self.yaw.sin(), 0.0, -self.yaw.cos()).normalize()
-    }
-
     /// Right direction.
     pub fn right(&self) -> Vec3 {
         self.forward().cross(Vec3::Y).normalize()
@@ -65,14 +70,26 @@ impl Camera {
     }
 
     /// Move the camera based on input flags. Flying mode — Y follows look direction.
-    pub fn fly_move(&mut self, dt: f32, forward: bool, back: bool, left: bool, right: bool, up: bool, down: bool) {
+    pub fn fly_move(&mut self, dt: f32, intent: MoveIntent) {
         let mut dir = Vec3::ZERO;
-        if forward { dir += self.forward(); }
-        if back { dir -= self.forward(); }
-        if right { dir += self.right(); }
-        if left { dir -= self.right(); }
-        if up { dir += Vec3::Y; }
-        if down { dir -= Vec3::Y; }
+        if intent.forward {
+            dir += self.forward();
+        }
+        if intent.back {
+            dir -= self.forward();
+        }
+        if intent.right {
+            dir += self.right();
+        }
+        if intent.left {
+            dir -= self.right();
+        }
+        if intent.up {
+            dir += Vec3::Y;
+        }
+        if intent.down {
+            dir -= Vec3::Y;
+        }
         if dir.length_squared() > 0.0 {
             self.position += dir.normalize() * self.speed * dt;
         }
