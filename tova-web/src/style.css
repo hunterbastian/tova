@@ -1,0 +1,538 @@
+:root {
+  color-scheme: dark;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  --bg-top: #14110f;
+  --bg-bottom: #050606;
+  --ink: #e6dcc7;
+  --muted: #aa9a7a;
+  --panel: rgba(12, 11, 10, 0.78);
+  --edge: rgba(188, 164, 111, 0.26);
+  --accent: #c4aa69;
+  --danger: #8c4b41;
+  --magic: #5c768f;
+  --fatigue: #8f8551;
+  --panel-deep: rgba(9, 8, 7, 0.88);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top, rgba(216, 195, 136, 0.28), transparent 34%),
+    radial-gradient(circle at 24% 12%, rgba(132, 151, 106, 0.24), transparent 42%),
+    linear-gradient(180deg, #88967f 0%, #576345 54%, #343426 100%);
+}
+
+body {
+  position: relative;
+}
+
+#app canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.veil {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background:
+    linear-gradient(180deg, rgba(6, 8, 9, 0.42), rgba(6, 8, 9, 0.18)),
+    radial-gradient(circle at center, rgba(190, 171, 114, 0.08), transparent 55%);
+  transition: opacity 180ms ease, visibility 180ms ease;
+  z-index: 3;
+}
+
+.veil[data-mode="ready"] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.card {
+  width: min(34rem, 100%);
+  padding: 1.5rem 1.65rem;
+  border: 1px solid var(--edge);
+  background: linear-gradient(180deg, rgba(19, 17, 15, 0.9), rgba(9, 9, 8, 0.84));
+  color: var(--ink);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.card h1 {
+  margin: 0.3rem 0 0.6rem;
+  font-size: clamp(2.8rem, 6vw, 4.7rem);
+  line-height: 0.95;
+  font-weight: 500;
+}
+
+.card p {
+  margin: 0.42rem 0;
+  line-height: 1.5;
+}
+
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem 1rem;
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.boot-actions {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 1rem;
+}
+
+.safe-mode-link {
+  width: fit-content;
+  padding: 0.52rem 0.78rem;
+  border: 1px solid rgba(196, 170, 105, 0.42);
+  color: var(--ink);
+  background: rgba(22, 18, 14, 0.78);
+  text-decoration: none;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.74rem;
+}
+
+.safe-mode-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  color: var(--ink);
+}
+
+.compass {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(36rem, 48vw);
+  height: 2rem;
+  overflow: hidden;
+  border-bottom: 1px solid var(--edge);
+  background: linear-gradient(180deg, var(--panel-deep) 0%, rgba(9, 8, 7, 0.35) 100%);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+}
+
+.compass[data-visible="true"] {
+  opacity: 1;
+}
+
+.compass-notch {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid var(--accent);
+}
+
+.compass-dir {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  color: rgba(170, 154, 122, 0.45);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.compass-dir[data-major] {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.compass-dir[data-north] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.compass-poi {
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.status {
+  position: absolute;
+  top: 2.8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--accent);
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 7.3rem;
+  transform: translateX(-50%);
+  padding: 0.5rem 0.8rem;
+  border: 1px solid rgba(196, 170, 105, 0.42);
+  background: rgba(22, 18, 14, 0.84);
+  color: var(--ink);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+
+.prompt[data-visible="true"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+.vitals {
+  position: absolute;
+  left: 1.2rem;
+  bottom: 1.3rem;
+  display: grid;
+  gap: 0.55rem;
+  width: min(18rem, 35vw);
+}
+
+.vital {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.vital-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.vital-track {
+  height: 0.72rem;
+  border: 1px solid var(--edge);
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.vital-fill {
+  height: 100%;
+  transform-origin: left center;
+}
+
+.vital[data-kind="health"] .vital-fill {
+  background: var(--danger);
+}
+
+.vital[data-kind="magicka"] .vital-fill {
+  background: var(--magic);
+}
+
+.vital[data-kind="fatigue"] .vital-fill {
+  background: var(--fatigue);
+}
+
+.hotbar {
+  position: absolute;
+  left: 50%;
+  bottom: 1.2rem;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+}
+
+.selected-label {
+  color: var(--muted);
+  letter-spacing: 0.14em;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.hotbar-row {
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+}
+
+.slot {
+  width: 4.4rem;
+  height: 4.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 10, 12, 0.88);
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.slot[data-active="true"] {
+  border-color: rgba(190, 171, 114, 0.75);
+  box-shadow: inset 0 0 0 1px rgba(190, 171, 114, 0.25);
+}
+
+.slot-chip {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.slot-index {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.45rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2rem;
+  height: 2rem;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(235, 227, 213, 0.86);
+}
+
+.crosshair::before {
+  left: 50%;
+  top: 0.18rem;
+  width: 2px;
+  height: 1.64rem;
+  transform: translateX(-50%);
+}
+
+.crosshair::after {
+  top: 50%;
+  left: 0.18rem;
+  width: 1.64rem;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.crosshair[data-visible="true"] {
+  opacity: 1;
+}
+
+.damage-flash {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(160, 40, 30, 0.55) 100%);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 4;
+}
+
+.damage-flash.active {
+  animation: damage-pulse 0.32s ease-out forwards;
+}
+
+@keyframes damage-pulse {
+  0% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+.death-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 2, 2, 0.92);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.8s ease, visibility 0.8s ease;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.death-screen[data-visible="true"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+.death-text {
+  color: var(--danger);
+  font-size: 2.2rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.kills {
+  position: absolute;
+  right: 1.1rem;
+  bottom: 3.8rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--accent);
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 180ms ease;
+}
+
+.kills[data-visible="true"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+.seed {
+  position: absolute;
+  right: 1.1rem;
+  bottom: 1.3rem;
+  padding: 0.55rem 0.72rem;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.minimap-wrap {
+  position: absolute;
+  right: 1.1rem;
+  top: 4.8rem;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  border: 1px solid var(--edge);
+  background: rgba(9, 8, 7, 0.82);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.minimap-wrap[data-visible="true"] {
+  opacity: 1;
+}
+
+.minimap-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.weapon-panel {
+  position: absolute;
+  right: 1.1rem;
+  top: 1.1rem;
+  min-width: 11rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--edge);
+  background: linear-gradient(180deg, rgba(20, 15, 11, 0.84), var(--panel-deep));
+}
+
+.weapon-label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.weapon-name {
+  margin-top: 0.2rem;
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+@media (max-width: 760px) {
+  .controls-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vitals {
+    width: calc(100vw - 2.4rem);
+    bottom: 7rem;
+  }
+
+  .hotbar-row {
+    gap: 0.45rem;
+    padding: 0.55rem;
+  }
+
+  .slot {
+    width: 3.5rem;
+    height: 3.3rem;
+  }
+
+  .seed {
+    top: 5.6rem;
+    right: 1rem;
+    bottom: auto;
+  }
+
+  .weapon-panel {
+    top: 1rem;
+    right: 1rem;
+    min-width: auto;
+    width: calc(100vw - 2rem);
+  }
+
+  .prompt {
+    bottom: 6.25rem;
+    width: calc(100vw - 2rem);
+    text-align: center;
+  }
+
+  .minimap-wrap {
+    display: none;
+  }
+}

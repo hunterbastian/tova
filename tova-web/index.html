@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tova Three</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle at top, #3e4b3b 0%, #151515 68%);
+        color: #efe3c4;
+        font-family: "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+      }
+
+      #app {
+        width: 100%;
+        height: 100%;
+      }
+
+      .boot-fallback {
+        min-height: 100%;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .boot-card {
+        width: min(34rem, 100%);
+        padding: 1.5rem 1.65rem;
+        border: 1px solid rgba(188, 164, 111, 0.26);
+        background: linear-gradient(180deg, rgba(19, 17, 15, 0.92), rgba(9, 9, 8, 0.88));
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+      }
+
+      .boot-card h1 {
+        margin: 0 0 0.6rem;
+        font-size: clamp(2.8rem, 6vw, 4.7rem);
+        font-weight: 500;
+      }
+
+      .boot-card p {
+        margin: 0.4rem 0;
+        line-height: 1.5;
+      }
+
+      .boot-card a {
+        display: inline-block;
+        margin-top: 0.75rem;
+        padding: 0.52rem 0.78rem;
+        border: 1px solid rgba(188, 164, 111, 0.4);
+        color: #efe3c4;
+        background: rgba(22, 18, 14, 0.78);
+        text-decoration: none;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-size: 0.74rem;
+      }
+    </style>
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <div class="boot-fallback">
+        <div class="boot-card">
+          <h1>Tova</h1>
+          <p>Loading the frontier...</p>
+          <p>If the 3D scene does not appear, refresh once and try Chrome or Safari.</p>
+          <a href="?safe=1">Use safe mode</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
