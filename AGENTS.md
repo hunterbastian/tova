@@ -1,39 +1,23 @@
 # AGENTS.md
 
 ## Project Scope
-Tova is a native Rust + `wgpu` voxel engine located in `/Users/hunterbastian/Desktop/Code/tova/tova-engine`.
+Tova is a web-first Three.js game located in `/Users/hunterbastian/Desktop/Code/tova/tova-web`.
+The older Rust + `wgpu` prototype in `/Users/hunterbastian/Desktop/Code/tova/tova-engine` is archived reference code, not the active product surface.
 
 ## Prerequisites
 
-- Rust toolchain version: `stable` (matches CI in `.github/workflows/release.yml`).
-- Required Rust targets:
-  - `x86_64-unknown-linux-gnu`
-  - `aarch64-apple-darwin`
-  - `x86_64-apple-darwin`
-  - `x86_64-pc-windows-msvc`
-- OS dependencies:
-  - macOS: Xcode Command Line Tools (`xcode-select --install`)
-  - Ubuntu/Debian: `build-essential`, `pkg-config`, `libasound2-dev`, `libudev-dev`, `libxkbcommon-dev`, `libwayland-dev`, `libx11-dev`, `libxrandr-dev`, `libxi-dev`, `libxcursor-dev`, `libxinerama-dev`
-  - Windows: Visual Studio Build Tools 2022 with Desktop C++ workload
+- Node.js 20+ with `npm`
+- A modern browser with WebGL support
+- Optional: Rust toolchain only if you need to inspect the archived native prototype
 
 ### Setup Command Block
 ```sh
-# Ubuntu/Debian only:
-sudo apt-get update && sudo apt-get install -y \
-  build-essential pkg-config libasound2-dev libudev-dev libxkbcommon-dev \
-  libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev
-
-# macOS only (run once if needed):
-# xcode-select --install
-
-rustup toolchain install stable
-rustup default stable
-rustup component add rustfmt clippy
-rustup target add x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc
+cd /Users/hunterbastian/Desktop/Code/tova/tova-web
+npm install
 ```
 
-### Rust Update Tracking
-Use this from repo root to update Rust and refresh the tracked metadata used by the app title:
+### Archived Native Tracking
+Only use this if you intentionally work in the archived Rust prototype:
 
 ```sh
 cd /Users/hunterbastian/Desktop/Code/tova
@@ -43,53 +27,37 @@ cat /Users/hunterbastian/Desktop/Code/tova/tova-engine/rust-toolchain-status.txt
 
 ## Core Commands
 
-Run these from `/Users/hunterbastian/Desktop/Code/tova/tova-engine`:
+Run these from `/Users/hunterbastian/Desktop/Code/tova/tova-web`:
 
 ```sh
-cargo run
-cargo run --release
-cargo build
-cargo build --release
-cargo check
-cargo test
-cargo clippy --all-targets --all-features
+npm run dev
+npm run build
 ```
 
 ## Workflows
 
 ### 1) Local Development Loop
 ```sh
-cd /Users/hunterbastian/Desktop/Code/tova/tova-engine
-cargo check
-cargo run
+cd /Users/hunterbastian/Desktop/Code/tova
+./scripts/run_tova_web.sh
 ```
 
 ### 2) Pre-PR Verification
 ```sh
-cd /Users/hunterbastian/Desktop/Code/tova/tova-engine
-cargo fmt --all --check
-cargo clippy --all-targets --all-features
-cargo test
-cargo build --release
+cd /Users/hunterbastian/Desktop/Code/tova/tova-web
+npm run build
 ```
 
 ### 3) Release Workflow (GitHub Actions)
-This repo ships binaries through `.github/workflows/release.yml` when a tag matching `v*` is pushed.
+No automated release workflow is currently the default for the web build. Treat `tova-web` as the maintained runtime and wire hosting/deployment explicitly when you are ready to publish.
 
 ```sh
 cd /Users/hunterbastian/Desktop/Code/tova
-git tag -a v0.1.0 -m "v0.1.0"
-git push origin v0.1.0
+npm --prefix tova-web run build
 ```
 
-The workflow builds and publishes:
-- Linux: `x86_64-unknown-linux-gnu`
-- macOS Apple Silicon: `aarch64-apple-darwin`
-- macOS Intel: `x86_64-apple-darwin`
-- Windows: `x86_64-pc-windows-msvc`
-
 ### 4) Changelog Update Workflow
-Before tagging a release, add a dated entry in `/Users/hunterbastian/Desktop/Code/tova/CHANGELOG.md`:
+Before cutting a new web build or major milestone, add a dated entry in `/Users/hunterbastian/Desktop/Code/tova/CHANGELOG.md`:
 
 ```sh
 cd /Users/hunterbastian/Desktop/Code/tova
@@ -98,5 +66,6 @@ git commit -m "docs: update changelog"
 ```
 
 ## Notes
-- Current release automation is tag-driven only (`push.tags: v*`).
-- `rodio` audio is enabled in the engine and should degrade gracefully if no output device is available.
+- The supported runtime is the browser client in `tova-web/`.
+- Keep `CHANGELOG.md` and `progress.md` current as web work lands.
+- Treat `tova-engine/` as archived unless a future task explicitly revives it.

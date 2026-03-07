@@ -1,0 +1,81 @@
+:root {
+  color-scheme: dark;
+  font-family: Georgia, "Times New Roman", serif;
+  background: #090b0d;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top, rgba(77, 84, 70, 0.28), transparent 40%),
+    linear-gradient(180deg, #11151a 0%, #090b0d 100%);
+}
+
+body {
+  position: relative;
+}
+
+#tova-canvas {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  outline: none;
+  z-index: 2;
+}
+
+.loading-shell {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 180ms ease;
+}
+
+.loading-shell[data-state="ready"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.loading-card {
+  padding: 1.2rem 1.4rem;
+  border: 1px solid rgba(200, 183, 140, 0.22);
+  background: rgba(12, 15, 18, 0.78);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  color: #ddd6c2;
+  text-align: center;
+  max-width: 26rem;
+}
+
+.loading-card h1 {
+  margin: 0.1rem 0 0.5rem;
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.loading-card p {
+  margin: 0.35rem 0;
+  line-height: 1.45;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+  color: #b7a579;
+}
+
+.hint {
+  color: #9fa59f;
+  font-size: 0.92rem;
+}

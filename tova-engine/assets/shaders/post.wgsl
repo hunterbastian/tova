@@ -6,7 +6,7 @@ struct PostUniform {
     color_grade_amount: f32,
     vignette_strength: f32,
     dither_strength: f32,
-    _pad0: f32,
+    rain_intensity: f32,
     sun_screen_pos: vec2<f32>,
     sun_glare_strength: f32,
     near_plane: f32,
@@ -16,8 +16,10 @@ struct PostUniform {
     volumetric_weight: f32,
     volumetric_density: f32,
     volumetric_steps: f32,
-    _pad1: f32,
-    _pad2: f32,
+    rain_speed: f32,
+    rain_slant: f32,
+    rain_scale: f32,
+    _pad0: vec3<f32>,
 };
 
 struct BlurUniform {
@@ -80,11 +82,77 @@ fn hash_noise(p: vec2<f32>) -> f32 {
     return fract(sin(h) * 43758.5453);
 }
 
+fn pixelate_uv(uv: vec2<f32>, dimensions: vec2<u32>) -> vec2<f32> {
+    let size = vec2<f32>(dimensions);
+    return (floor(uv * size) + vec2<f32>(0.5, 0.5)) / size;
+}
+
+fn posterize(color: vec3<f32>, levels: f32) -> vec3<f32> {
+    return floor(color * levels + 0.5) / levels;
+}
+
 fn color_grade(color: vec3<f32>, amount: f32) -> vec3<f32> {
     let luma = dot(color, vec3<f32>(0.2126, 0.7152, 0.0722));
     var graded = mix(vec3<f32>(luma), color, 1.0 + amount * 0.18);
-    graded *= mix(vec3<f32>(1.0), vec3<f32>(1.02, 1.0, 0.97), amount);
+    graded *= mix(vec3<f32>(1.0), vec3<f32>(0.94, 0.98, 1.05), amount);
     return graded;
+}
+
+fn pixel_rain_layer(
+    uv: vec2<f32>,
+    time: f32,
+    scale: f32,
+    speed: f32,
+    slant: f32,
+    density: f32,
+    min_length: f32,
+    max_length: f32,
+) -> f32 {
+    let warped = vec2<f32>(uv.x + uv.y * slant, uv.y - time * speed);
+    let grid = vec2<f32>(scale, scale * 0.42);
+    let cell = floor(warped * grid);
+    let local = fract(warped * grid);
+
+    let activation = step(1.0 - density, hash_noise(cell + vec2<f32>(13.0, 5.0)));
+    let width = 1.0 - smoothstep(0.10, 0.34, abs(local.x - 0.5));
+    let streak_length = mix(min_length, max_length, hash_noise(cell + vec2<f32>(31.0, 17.0)));
+    let streak = smoothstep(0.0, 0.06, local.y)
+        * (1.0 - smoothstep(streak_length, streak_length + 0.08, local.y));
+    let taper = 1.0 - smoothstep(0.0, streak_length + 0.08, local.y) * 0.35;
+
+    return activation * width * streak * taper;
+}
+
+fn pixel_rain(uv: vec2<f32>, depth: f32) -> vec3<f32> {
+    let far_layer = pixel_rain_layer(
+        uv,
+        composite_post.time,
+        composite_post.rain_scale,
+        composite_post.rain_speed,
+        composite_post.rain_slant,
+        composite_post.rain_intensity * 0.72,
+        0.28,
+        0.62,
+    );
+    let near_layer = pixel_rain_layer(
+        uv + vec2<f32>(0.17, 0.0),
+        composite_post.time,
+        composite_post.rain_scale * 0.72,
+        composite_post.rain_speed * 1.28,
+        composite_post.rain_slant * 1.45,
+        composite_post.rain_intensity * 0.52,
+        0.22,
+        0.54,
+    );
+
+    let sky_visibility = smoothstep(0.72, 1.0, depth);
+    let horizon_boost = 0.75 + (1.0 - uv.y) * 0.45;
+    let rain = (far_layer * 0.65 + near_layer) * composite_post.rain_intensity;
+    let sparkle = hash_noise(floor(uv * composite_post.rain_scale * 0.5) + vec2<f32>(composite_post.time * 3.0, 7.0));
+    let glint = smoothstep(0.86, 1.0, sparkle) * rain * 0.16;
+    let visibility = mix(0.55, 1.0, sky_visibility) * horizon_boost;
+
+    return vec3<f32>(0.56, 0.60, 0.64) * (rain * visibility + glint);
 }
 
 @vertex
@@ -140,22 +208,25 @@ fn fs_blur(in: PostVertexOutput) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_composite(in: PostVertexOutput) -> @location(0) vec4<f32> {
-    var hdr = textureSample(composite_scene, composite_sampler, in.uv).rgb;
+    let scene_uv = pixelate_uv(in.uv, textureDimensions(composite_scene));
+    let bloom_half_uv = pixelate_uv(in.uv, textureDimensions(composite_bloom_half));
+    let bloom_quarter_uv = pixelate_uv(in.uv, textureDimensions(composite_bloom_quarter));
+    var hdr = textureSample(composite_scene, composite_sampler, scene_uv).rgb;
 
-    let bloom_half = textureSample(composite_bloom_half, composite_sampler, in.uv).rgb;
-    let bloom_quarter = textureSample(composite_bloom_quarter, composite_sampler, in.uv).rgb;
+    let bloom_half = textureSample(composite_bloom_half, composite_sampler, bloom_half_uv).rgb;
+    let bloom_quarter = textureSample(composite_bloom_quarter, composite_sampler, bloom_quarter_uv).rgb;
 
     if composite_post.bloom_enabled > 0.5 {
         hdr += (bloom_half + bloom_quarter * 0.75) * composite_post.bloom_intensity;
     }
 
     let depth_size = vec2<f32>(textureDimensions(composite_depth));
-    let depth_coord = clamp(vec2<i32>(in.uv * depth_size), vec2<i32>(0), vec2<i32>(depth_size) - vec2<i32>(1));
+    let depth_coord = clamp(vec2<i32>(scene_uv * depth_size), vec2<i32>(0), vec2<i32>(depth_size) - vec2<i32>(1));
     let depth = textureLoad(composite_depth, depth_coord, 0);
 
     if depth >= 0.9999 {
-        let horizon = vec3<f32>(0.71, 0.69, 0.63);
-        let zenith = vec3<f32>(0.56, 0.60, 0.68);
+        let horizon = vec3<f32>(0.20, 0.19, 0.18);
+        let zenith = vec3<f32>(0.10, 0.12, 0.15);
         let gradient_t = clamp(pow(1.0 - in.uv.y, 1.35), 0.0, 1.0);
         let sky = mix(horizon, zenith, gradient_t);
         hdr = mix(hdr, sky, 0.9);
@@ -197,13 +268,18 @@ fn fs_composite(in: PostVertexOutput) -> @location(0) vec4<f32> {
 
     var color = aces_fitted(hdr);
     color = color_grade(color, composite_post.color_grade_amount);
+    color = posterize(color, 28.0);
+    color += pixel_rain(in.uv, depth);
 
     let vignette_dist = distance(in.uv, vec2<f32>(0.5, 0.5));
     let vignette = smoothstep(0.72, 0.34, vignette_dist);
     color *= mix(1.0, vignette, composite_post.vignette_strength);
 
-    let noise = hash_noise(in.uv * 1337.0 + vec2<f32>(composite_post.time, composite_post.time * 0.37));
-    color += (noise - 0.5) * composite_post.dither_strength;
+    let scanline = 0.985 + sin(scene_uv.y * depth_size.y * 3.14159) * 0.015;
+    color *= scanline;
+
+    let noise = hash_noise(scene_uv * 1337.0 + vec2<f32>(composite_post.time, composite_post.time * 0.37));
+    color += (noise - 0.5) * composite_post.dither_strength * 1.35;
 
     return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }

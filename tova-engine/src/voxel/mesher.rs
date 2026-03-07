@@ -1,6 +1,6 @@
 use super::block::{Block, BLOCK_COLORS};
 use super::chunk::{Chunk, CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT};
-use crate::renderer::Vertex;
+use crate::geometry::Vertex;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FaceCell {

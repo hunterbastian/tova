@@ -12,6 +12,7 @@ Behavior:
 - Files are auto-discovered at startup.
 - Tracks are queued as a long rotating playlist.
 - Procedural ambient wind still plays underneath.
+- If no files are found, Tova now falls back to built-in procedural fantasy music.
 
 Notes:
 - Tova does not ship third-party copyrighted songs in this folder.

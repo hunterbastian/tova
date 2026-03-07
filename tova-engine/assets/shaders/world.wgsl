@@ -126,8 +126,12 @@ fn apply_height_fog(color: vec3<f32>, world_pos: vec3<f32>, camera_dist: f32, su
     let dist_term = 1.0 - exp(-camera_dist * fog_density);
     let height_term = exp(-max(world_pos.y, 0.0) * lighting.fog_height_falloff);
     let sky_warmth = clamp(sun_height * 0.5 + 0.5, 0.0, 1.0);
-    let fog_tint = mix(lighting.fog_color * vec3<f32>(0.9, 0.95, 1.05), lighting.fog_color, sky_warmth);
-    let fog = clamp(dist_term * (0.65 + 0.35 * height_term), 0.0, 1.0);
+    let fog_tint = mix(
+        lighting.fog_color * vec3<f32>(0.82, 0.90, 0.98),
+        lighting.fog_color * vec3<f32>(0.96, 0.94, 0.92),
+        sky_warmth,
+    );
+    let fog = clamp(dist_term * (0.80 + 0.40 * height_term), 0.0, 1.0);
     return mix(color, fog_tint, fog);
 }
 
@@ -151,8 +155,8 @@ fn fs_world(in: VertexOutput) -> @location(0) vec4<f32> {
     let half_lambert = ndotl * 0.5 + 0.5;
     let diffuse = lighting.sun_color * half_lambert * lighting.sun_intensity;
 
-    let sky_ambient = vec3<f32>(0.52, 0.55, 0.58) * lighting.ambient;
-    let ground_ambient = vec3<f32>(0.28, 0.27, 0.24) * lighting.ambient;
+    let sky_ambient = vec3<f32>(0.30, 0.33, 0.36) * lighting.ambient;
+    let ground_ambient = vec3<f32>(0.11, 0.10, 0.09) * lighting.ambient;
     let ambient = mix(ground_ambient, sky_ambient, n.y * 0.5 + 0.5);
 
     let camera_dist = distance(in.world_pos, frame.camera_pos);
@@ -168,12 +172,12 @@ fn fs_world(in: VertexOutput) -> @location(0) vec4<f32> {
         let fresnel = pow(1.0 - max(dot(view_dir, vec3<f32>(0.0, 1.0, 0.0)), 0.0), 3.0);
         let reflected = reflect(-light_dir, n);
         let sparkle = pow(max(dot(reflected, view_dir), 0.0), 36.0) * lighting.water_specular;
-        let water_tint = vec3<f32>(0.20, 0.33, 0.42) + vec3<f32>(wave * 0.35);
-        lit = mix(lit, water_tint, 0.55) + fresnel * 0.13 + sparkle;
+        let water_tint = vec3<f32>(0.08, 0.11, 0.12) + vec3<f32>(wave * 0.16);
+        lit = mix(lit, water_tint, 0.68) + fresnel * 0.08 + sparkle * 0.45;
     }
 
     if lighting.shader_pack_enabled < 0.5 {
-        let simple = in.base_color * (ambient + diffuse * 0.7);
+        let simple = in.base_color * (ambient + diffuse * 0.55);
         return vec4<f32>(simple, 1.0);
     }
 

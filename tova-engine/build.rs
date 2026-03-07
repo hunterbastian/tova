@@ -9,8 +9,10 @@ fn main() {
         .output()
         .ok()
         .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
-        .unwrap_or_else(|| "rustc unknown".to_string());
+        .map_or_else(
+            || "rustc unknown".to_string(),
+            |output| String::from_utf8_lossy(&output.stdout).trim().to_string(),
+        );
 
     let updated_at =
         read_updated_at("rust-toolchain-status.txt").unwrap_or_else(|| "unknown".to_string());

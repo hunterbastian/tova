@@ -1,0 +1,27 @@
+Original prompt: lets make it so you can play tova in the browser
+
+- 2026-03-06: Added a wasm/browser path for the Rust engine and verified it boots in a browser with WebGPU.
+- 2026-03-06: New request is to use a lot of Three.js. Building that as a separate web client is the clean path; mixing heavy Three.js usage into the Rust `wgpu` renderer would be the wrong abstraction.
+- DONE: Scaffolded `tova-web` with Three.js + Vite.
+- DONE: Built a procedural world with a flat grassy spawn, forest, and castle.
+- DONE: Added first-person controls, hotbar HUD, `render_game_to_text`, and `advanceTime(ms)`.
+- DONE: Validated with Playwright.
+- TODO: Add real voxel/block interaction to the Three.js client if the web version becomes the main play surface.
+- TODO: Consider code-splitting or asset extraction if the Three.js bundle size needs to drop below ~500 kB minified.
+- 2026-03-06: Scaffolded a separate `tova-web` Three.js client with procedural terrain, forest, castle, first-person controls, hotbar HUD, and browser test hooks.
+- 2026-03-06: Added a webdriver-safe walk mode so browser automation can enter and move through the Three.js world without Pointer Lock errors.
+- 2026-03-06: Split browser entry modes so click uses Pointer Lock for real play and Enter uses keyboard walk mode for deterministic automation.
+- 2026-03-06: Added a real favicon to the Three.js client so the browser console stays quiet on load.
+- 2026-03-06: Added a shrine sword pickup, held first-person weapon model, and a heavier Morrowind/Oblivion atmosphere pass to the Three.js client.
+- 2026-03-06: Tuned the held sword viewmodel down into the lower-right so it reads more like an Elder Scrolls weapon stance.
+- 2026-03-06: Reused shared Three.js terrain/sword/shrine/rock/brazier resources across world regeneration and limited `Enter`/`KeyB` automation controls to webdriver sessions.
+- 2026-03-06: Split the Three.js browser client into `constants`, `ui`, `player`, `weapon`, and `world` modules and marked the Rust `trunk` browser launcher as experimental while keeping Three.js as the maintained web path.
+- 2026-03-06: Collapsed the project story to a single supported web version by making `run_tova_web.sh` launch `tova-web`, turning `run_tova_three_web.sh` into a compatibility alias, and archiving the old Rust migration/docs path.
+- 2026-03-06: Added foundational `interactables` and `actors` systems to the web client; the sword shrine now uses generic interaction wiring and the world now tracks dormant skeleton sentries for future enemy/combat work.
+- 2026-03-06: Linked `tova-web` to the existing Vercel `tova` project, verified the project is already connected to `github.com/hunterbastian/tova`, and published a live production deploy at `https://tova-hunterbastians-projects.vercel.app`.
+- 2026-03-06: Fixed the "click does nothing" issue in the web client by making click enter immediate walk-mode fallback, adding manual mouse-look outside pointer lock, broadening input capture to the app surface, and skipping pointer lock entirely in webdriver sessions to keep automated runs clean.
+- 2026-03-06: Changed startup to a real intro state and added an HTML boot card so the live page no longer reads as an empty dark screen before the player enters the frontier.
+- 2026-03-06: Reworked spawn composition so the first view is a readable grassy clearing with the castle framed in the distance; moved the shrine off to the side and brightened the spawn atmosphere to better match the original Morrowind-meets-Minecraft brief.
+- 2026-03-06: Added a stronger visibility pass for the web spawn: brighter renderer clear color/exposure, warmer ambient fill, lighter meadow terrain colors, reduced fog density, and a local spawn light so the game no longer reads as black when you enter.
+- 2026-03-06: Added a browser-safe fallback mode at `?safe=1`, including a safe-mode link in the intro UI and simpler unlit Three.js materials for world, actors, and sword so touchy browsers still get a visible playable scene.
+- 2026-03-06: Made safe mode the default browser path and tightened the procedural spawn vista so the meadow/castle composition survives across seeds and across less capable browser renderers.

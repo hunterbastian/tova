@@ -1,6 +1,6 @@
-# Tova Rust + wgpu — Migration Plan
+# Archived Rust + wgpu Migration Plan
 
-Migrating Tova from Three.js (browser) to Rust + wgpu (native desktop) for maximum performance and Steam/Steam Deck distribution.
+This document is archived. Tova is currently maintained as a web-first Three.js game in `tova-web/`, and the Rust + `wgpu` migration described below is no longer the active product direction.
 
 ## Phase 1: Foundation (Window + Renderer)
 - Set up Rust project with `cargo`
