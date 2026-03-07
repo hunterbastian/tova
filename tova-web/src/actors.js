@@ -42,6 +42,7 @@ function getBoneMaterial(safeMode) {
             color: "#c8c1b2",
             roughness: 0.92,
             metalness: 0.04,
+            flatShading: true,
           }),
     );
     sharedActorAssets.boneMaterials.set(key, material);

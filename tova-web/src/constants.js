@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 export const WORLD_SIZE = 220;
-export const WORLD_SEGMENTS = 220;
+export const WORLD_SEGMENTS = 110;
 export const SPAWN_RADIUS = 14;
 export const SPAWN_BLEND_RADIUS = 30;
 export const PLAYER_HEIGHT = 1.8;

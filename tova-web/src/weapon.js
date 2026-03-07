@@ -23,10 +23,10 @@ function getSwordMaterial(name, safeMode) {
   let material = sharedSwordAssets.materials.get(key);
   if (!material) {
     const definitions = {
-      steel: { color: "#cbc6bb", roughness: 0.34, metalness: 0.82 },
-      fuller: { color: "#8f8b84", roughness: 0.36, metalness: 0.8 },
-      guard: { color: "#8f7444", roughness: 0.58, metalness: 0.46 },
-      grip: { color: "#3c2f28", roughness: 0.92, metalness: 0.08 },
+      steel: { color: "#cbc6bb", roughness: 0.34, metalness: 0.82, flatShading: true },
+      fuller: { color: "#8f8b84", roughness: 0.36, metalness: 0.8, flatShading: true },
+      guard: { color: "#8f7444", roughness: 0.58, metalness: 0.46, flatShading: true },
+      grip: { color: "#3c2f28", roughness: 0.92, metalness: 0.08, flatShading: true },
     };
     const config = definitions[name];
     material = markShared(

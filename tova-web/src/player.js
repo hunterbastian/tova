@@ -133,8 +133,9 @@ export function createPlayerSystem({
     wasGrounded = true;
     camera.rotation.z = 0;
     const target = state.castleCenter.clone();
-    target.y = y - 0.5;
+    target.y = y - 2.0;
     camera.lookAt(target);
+    camera.rotation.x -= 0.08;
   }
 
   function update(dt) {

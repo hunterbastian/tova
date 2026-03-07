@@ -20,6 +20,7 @@ import { createPlayerSystem } from "./player.js";
 import { createUi } from "./ui.js";
 import { createWeaponSystem } from "./weapon.js";
 import { createWorldSystem } from "./world.js";
+import { createShaderPipeline } from "./shaders.js";
 
 const app = document.querySelector("#app");
 const safeMode = getSafeMode();
@@ -28,24 +29,25 @@ const ui = createUi({ app, hotbar: HOTBAR, safeMode });
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(safeMode ? "#c4ceb3" : "#9aa78d", 1);
+renderer.setClearColor(safeMode ? "#c4ceb3" : "#d8c8b8", 1);
 renderer.shadowMap.enabled = !safeMode;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = safeMode ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = safeMode ? 1 : 1.08;
+renderer.toneMapping = safeMode ? THREE.NoToneMapping : THREE.ReinhardToneMapping;
+renderer.toneMappingExposure = safeMode ? 1 : 1.35;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(safeMode ? "#c4ceb3" : "#9aa78d");
-scene.fog = safeMode ? null : new THREE.FogExp2("#93a084", 0.007);
-
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 600);
+const shaderPipeline = createShaderPipeline({ renderer, scene, camera, safeMode });
+scene.background = new THREE.Color(safeMode ? "#c4ceb3" : "#d8c8b8");
+scene.fog = safeMode ? null : new THREE.FogExp2("#d8c8b8", 0.012);
+
 const controls = new PointerLockControls(camera, renderer.domElement);
 scene.add(controls.object);
 
 const sun = new THREE.Vector3();
-sun.setFromSphericalCoords(1, Math.PI * 0.43, Math.PI * 0.08);
+sun.setFromSphericalCoords(1, Math.PI * 0.47, Math.PI * 0.12);
 
 if (!safeMode) {
   const sky = new Sky();
@@ -53,20 +55,20 @@ if (!safeMode) {
   scene.add(sky);
 
   const skyUniforms = sky.material.uniforms;
-  skyUniforms.turbidity.value = 7.2;
-  skyUniforms.rayleigh.value = 1.35;
-  skyUniforms.mieCoefficient.value = 0.015;
-  skyUniforms.mieDirectionalG.value = 0.9;
+  skyUniforms.turbidity.value = 14;
+  skyUniforms.rayleigh.value = 3.2;
+  skyUniforms.mieCoefficient.value = 0.03;
+  skyUniforms.mieDirectionalG.value = 0.92;
   skyUniforms.sunPosition.value.copy(sun);
 }
 
-const ambientLight = new THREE.AmbientLight("#b7a98a", 0.98);
+const ambientLight = new THREE.AmbientLight("#c8a878", 1.1);
 scene.add(ambientLight);
 
-const hemiLight = new THREE.HemisphereLight("#d6c08e", "#42533d", 1.38);
+const hemiLight = new THREE.HemisphereLight("#d8c0a0", "#8a7060", 1.2);
 scene.add(hemiLight);
 
-const sunLight = new THREE.DirectionalLight("#f3ddb1", 2.35);
+const sunLight = new THREE.DirectionalLight("#f0c890", 2.0);
 sunLight.position.set(88, 132, -24);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(2048, 2048);
@@ -79,13 +81,13 @@ sunLight.shadow.camera.far = 280;
 scene.add(sunLight);
 scene.add(sunLight.target);
 
-const spawnFillLight = new THREE.PointLight("#ead9a4", 1.9, 52, 2);
+const spawnFillLight = new THREE.PointLight("#e0c898", 1.6, 52, 2);
 scene.add(spawnFillLight);
 
 if (!safeMode) {
   const moon = new THREE.Mesh(
     new THREE.SphereGeometry(7, 24, 24),
-    new THREE.MeshBasicMaterial({ color: "#d9ddd0" }),
+    new THREE.MeshBasicMaterial({ color: "#e8d8c0" }),
   );
   moon.position.set(-110, 92, -210);
   scene.add(moon);
@@ -239,6 +241,7 @@ function onResize() {
   camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  shaderPipeline.setSize(window.innerWidth, window.innerHeight);
 }
 
 function updateScene(dt) {
@@ -252,7 +255,7 @@ function updateScene(dt) {
       playerSystem.respawnAtSpawn();
       setStatus("You awaken at the shrine");
     }
-    renderer.render(scene, camera);
+    shaderPipeline.render();
     refreshHud();
     return;
   }
@@ -264,7 +267,7 @@ function updateScene(dt) {
   weaponSystem.checkHit(actorTargets);
   actorSystem.update(dt, controls.object.position);
 
-  renderer.render(scene, camera);
+  shaderPipeline.render();
   refreshHud();
 }
 
@@ -333,6 +336,7 @@ window.render_game_to_text = () =>
     axes: "x east-west, y up, z north-south",
   });
 
+window.__tova = { camera, controls, scene, renderer };
 window.addEventListener("resize", onResize);
 
 renderer.domElement.addEventListener("webglcontextlost", (event) => {

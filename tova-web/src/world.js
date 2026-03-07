@@ -9,12 +9,12 @@ import {
 } from "./constants.js";
 
 const terrainPalette = {
-  grass: new THREE.Color("#697847"),
-  spawn: new THREE.Color("#8fa358"),
-  forest: new THREE.Color("#4a583a"),
-  highland: new THREE.Color("#776d5d"),
-  slope: new THREE.Color("#666459"),
-  dry: new THREE.Color("#8d7758"),
+  grass: new THREE.Color("#c4a56e"),
+  spawn: new THREE.Color("#d4b87a"),
+  forest: new THREE.Color("#8a7256"),
+  highland: new THREE.Color("#9c8872"),
+  slope: new THREE.Color("#b09878"),
+  dry: new THREE.Color("#c8a878"),
 };
 
 function markShared(resource) {
@@ -72,7 +72,7 @@ export function createWorldSystem({ scene, safeMode, state, createPedestalSword,
                 vertexColors: true,
                 roughness: 0.96,
                 metalness: 0.02,
-                flatShading: false,
+                flatShading: true,
               }),
         ),
       },
@@ -84,8 +84,8 @@ export function createWorldSystem({ scene, safeMode, state, createPedestalSword,
         bowlGeometry: markShared(new THREE.CylinderGeometry(0.22, 0.3, 0.24, 8)),
         stemGeometry: markShared(new THREE.CylinderGeometry(0.06, 0.08, 1.1, 6)),
         flameGeometry: markShared(new THREE.SphereGeometry(0.14, 12, 10)),
-        bowlMaterial: markShared(createLitMaterial(safeMode, { color: "#50443a", roughness: 0.92 })),
-        stemMaterial: markShared(createLitMaterial(safeMode, { color: "#70645a", roughness: 0.94 })),
+        bowlMaterial: markShared(createLitMaterial(safeMode, { color: "#50443a", roughness: 0.92, flatShading: true })),
+        stemMaterial: markShared(createLitMaterial(safeMode, { color: "#70645a", roughness: 0.94, flatShading: true })),
         flameMaterial: markShared(new THREE.MeshBasicMaterial({ color: "#f6c56d" })),
       },
       shrine: {
@@ -94,6 +94,7 @@ export function createWorldSystem({ scene, safeMode, state, createPedestalSword,
             color: "#84796f",
             roughness: 0.96,
             metalness: 0.04,
+            flatShading: true,
           }),
         ),
         daisGeometry: markShared(new THREE.CylinderGeometry(1.7, 2.1, 0.72, 10)),
@@ -145,8 +146,8 @@ export function createWorldSystem({ scene, safeMode, state, createPedestalSword,
     const castleLengthSq = castleCenter.x * castleCenter.x + castleCenter.z * castleCenter.z;
 
     function sampleHeight(x, z) {
-      const broad = terrainSampler.noise((x + offsetX) / 70, 0.15, (z + offsetZ) / 70) * 7.5;
-      const hills = terrainSampler.noise((x + offsetX) / 24, 0.32, (z + offsetZ) / 24) * 3.2;
+      const broad = terrainSampler.noise((x + offsetX) / 70, 0.15, (z + offsetZ) / 70) * 10;
+      const hills = terrainSampler.noise((x + offsetX) / 24, 0.32, (z + offsetZ) / 24) * 5;
       const ridge = terrainSampler.noise((x - ridgeOffset) / 11, 0.52, (z + ridgeOffset * 0.35) / 11) * 2.1;
       const peakDistance = Math.hypot(x - mountainPeak.x, z - mountainPeak.z);
       const peakLift = Math.max(0, 1 - peakDistance / 70);
@@ -423,7 +424,7 @@ export function createWorldSystem({ scene, safeMode, state, createPedestalSword,
 
     const grassGeometry = new THREE.ConeGeometry(0.15, 0.55, 4);
     const grassMaterial = createLitMaterial(safeMode,
-      { color: "#7a9e52", roughness: 0.96 },
+      { color: "#9a8a68", roughness: 0.96, flatShading: true },
       { fog: true },
     );
     const grassCount = 180;
@@ -455,8 +456,8 @@ export function createWorldSystem({ scene, safeMode, state, createPedestalSword,
     const treeCount = 220;
     const trunkGeometry = new THREE.CylinderGeometry(0.18, 0.28, 2.8, 7);
     const canopyGeometry = new THREE.ConeGeometry(1.35, 3.8, 8);
-    const trunkMaterial = createLitMaterial(safeMode, { color: "#54402d", roughness: 1 });
-    const canopyMaterial = createLitMaterial(safeMode, { color: "#36472d", roughness: 0.96 });
+    const trunkMaterial = createLitMaterial(safeMode, { color: "#5a4838", roughness: 1, flatShading: true });
+    const canopyMaterial = createLitMaterial(safeMode, { color: "#7a8060", roughness: 0.96, flatShading: true });
     const trunkMesh = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, treeCount);
     const canopyMesh = new THREE.InstancedMesh(canopyGeometry, canopyMaterial, treeCount);
     trunkMesh.castShadow = true;
@@ -520,11 +521,13 @@ export function createWorldSystem({ scene, safeMode, state, createPedestalSword,
       color: "#68675f",
       roughness: 0.95,
       metalness: 0.03,
+      flatShading: true,
     });
     const roofMaterial = createLitMaterial(safeMode, {
       color: "#3f3933",
       roughness: 0.92,
       metalness: 0.01,
+      flatShading: true,
     });
 
     const baseY = state.terrainContext.sampleHeight(state.castleCenter.x, state.castleCenter.z);
@@ -613,9 +616,9 @@ export function createWorldSystem({ scene, safeMode, state, createPedestalSword,
     const rng = mulberry32(seed ^ 0x53142fcd);
     const mist = new THREE.Group();
     const mistMaterial = new THREE.MeshBasicMaterial({
-      color: "#8f987f",
+      color: "#d0c0a8",
       transparent: true,
-      opacity: 0.11,
+      opacity: 0.18,
       depthWrite: false,
     });
 
@@ -626,7 +629,7 @@ export function createWorldSystem({ scene, safeMode, state, createPedestalSword,
       mist.add(sphere);
     }
 
-    const obeliskMaterial = createLitMaterial(safeMode, { color: "#7c6f5d", roughness: 0.96 });
+    const obeliskMaterial = createLitMaterial(safeMode, { color: "#7c6f5d", roughness: 0.96, flatShading: true });
     const obelisk = new THREE.Mesh(new THREE.BoxGeometry(2.4, 9, 2.4), obeliskMaterial);
     obelisk.position.set(22, state.terrainContext.sampleHeight(22, 12) + 4.5, 12);
     collisionSystem.addBox(22, 12, 1.3, 1.3);
@@ -634,7 +637,7 @@ export function createWorldSystem({ scene, safeMode, state, createPedestalSword,
     obelisk.receiveShadow = true;
     mist.add(obelisk);
 
-    const ruinMaterial = createLitMaterial(safeMode, { color: "#756857", roughness: 0.96 });
+    const ruinMaterial = createLitMaterial(safeMode, { color: "#756857", roughness: 0.96, flatShading: true });
     for (let index = 0; index < 3; index += 1) {
       const ruin = new THREE.Group();
       const originX = -18 + rng() * 52;
