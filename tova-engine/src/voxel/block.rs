@@ -28,17 +28,14 @@ impl Block {
         !matches!(self, Block::Air | Block::Water)
     }
 
-    pub fn is_transparent(self) -> bool {
-        matches!(self, Block::Air)
-    }
 }
 
 pub const BLOCK_COLORS: [[f32; 3]; 7] = [
     [0.0, 0.0, 0.0],       // Air (unused)
-    [0.38, 0.42, 0.32],    // Grass — grey-olive, desaturated
-    [0.40, 0.35, 0.28],    // Dirt — dusty tan
-    [0.45, 0.44, 0.42],    // Stone — warm slate grey
-    [0.55, 0.52, 0.42],    // Sand — muted khaki
-    [0.28, 0.32, 0.35],    // Water — dark slate blue-grey
-    [0.48, 0.46, 0.43],    // Cobble — weathered grey
+    [0.35, 0.38, 0.28],    // Grass — ashy olive, Bitter Coast scrub
+    [0.38, 0.33, 0.25],    // Dirt — Vvardenfell dust
+    [0.40, 0.38, 0.35],    // Stone — dark volcanic grey
+    [0.50, 0.46, 0.36],    // Sand — Azura's Coast beige
+    [0.25, 0.28, 0.30],    // Water — murky, ashfall-tinted
+    [0.42, 0.40, 0.37],    // Cobble — weathered Dwemer stone
 ];

@@ -1,24 +1,44 @@
+mod audio;
 mod renderer;
 mod player;
 mod voxel;
+mod world;
 
 use std::sync::Arc;
+
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
+
+use glam::Vec3;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
+use std::cell::RefCell;
+#[cfg(target_arch = "wasm32")]
+use std::rc::Rc;
+
+use audio::AudioSystem;
 use renderer::RenderState;
-use player::Input;
+use player::{Input, Player};
 
 struct App {
     state: Option<RenderState>,
     input: Input,
+    player: Player,
+    audio: AudioSystem,
     last_frame: Instant,
     cursor_grabbed: bool,
     window: Option<Arc<Window>>,
+    #[cfg(target_arch = "wasm32")]
+    pending_state: Rc<RefCell<Option<RenderState>>>,
 }
 
 impl App {
@@ -26,15 +46,20 @@ impl App {
         Self {
             state: None,
             input: Input::new(),
+            player: Player::new(Vec3::new(0.0, 80.0, 0.0)),
+            audio: AudioSystem::new(),
             last_frame: Instant::now(),
             cursor_grabbed: false,
             window: None,
+            #[cfg(target_arch = "wasm32")]
+            pending_state: Rc::new(RefCell::new(None)),
         }
     }
 
     fn grab_cursor(&mut self) {
         if let Some(window) = &self.window {
-            let _ = window.set_cursor_grab(CursorGrabMode::Locked)
+            let _ = window
+                .set_cursor_grab(CursorGrabMode::Locked)
                 .or_else(|_| window.set_cursor_grab(CursorGrabMode::Confined));
             window.set_cursor_visible(false);
             self.cursor_grabbed = true;
@@ -48,6 +73,17 @@ impl App {
             self.cursor_grabbed = false;
         }
     }
+
+    #[cfg(target_arch = "wasm32")]
+    fn poll_pending_state(&mut self) {
+        if self.state.is_none() {
+            if let Some(state) = self.pending_state.borrow_mut().take() {
+                self.state = Some(state);
+                self.last_frame = Instant::now();
+                log::info!("GPU initialized — Tova ready");
+            }
+        }
+    }
 }
 
 impl ApplicationHandler for App {
@@ -56,19 +92,61 @@ impl ApplicationHandler for App {
             return;
         }
 
-        let attrs = WindowAttributes::default()
-            .with_title("Tova")
-            .with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
+        #[allow(unused_mut)]
+        let mut attrs = WindowAttributes::default().with_title("Tova");
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            attrs = attrs.with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
+        }
 
         let window = Arc::new(event_loop.create_window(attrs).unwrap());
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use winit::platform::web::WindowExtWebSys;
+            let canvas = window.canvas().expect("winit window should have a canvas on web");
+
+            let web_window = web_sys::window().expect("no global window");
+            let document = web_window.document().expect("no document");
+            let body = document.body().expect("no body");
+
+            body.set_inner_html("");
+            let _ = body.style().set_property("margin", "0");
+            let _ = body.style().set_property("overflow", "hidden");
+            let _ = canvas.style().set_property("width", "100vw");
+            let _ = canvas.style().set_property("height", "100vh");
+            let _ = canvas.style().set_property("display", "block");
+            body.append_child(&canvas).expect("failed to append canvas");
+        }
+
         self.window = Some(window.clone());
 
-        let state = pollster::block_on(RenderState::new(window.clone()));
-        self.state = Some(state);
-        self.last_frame = Instant::now();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.state = Some(pollster::block_on(RenderState::new(window)));
+            self.last_frame = Instant::now();
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let pending = self.pending_state.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let state = RenderState::new(window).await;
+                *pending.borrow_mut() = Some(state);
+            });
+        }
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _id: WindowId,
+        event: WindowEvent,
+    ) {
+        #[cfg(target_arch = "wasm32")]
+        self.poll_pending_state();
+
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
 
@@ -86,19 +164,17 @@ impl ApplicationHandler for App {
                         ..
                     },
                 ..
-            } => {
-                match key_state {
-                    ElementState::Pressed => {
-                        if key == KeyCode::Escape {
-                            self.release_cursor();
-                        }
-                        self.input.key_down(key);
+            } => match key_state {
+                ElementState::Pressed => {
+                    if key == KeyCode::Escape {
+                        self.release_cursor();
                     }
-                    ElementState::Released => {
-                        self.input.key_up(key);
-                    }
+                    self.input.key_down(key);
                 }
-            }
+                ElementState::Released => {
+                    self.input.key_up(key);
+                }
+            },
 
             WindowEvent::MouseInput {
                 state: ElementState::Pressed,
@@ -115,17 +191,29 @@ impl ApplicationHandler for App {
                 self.last_frame = now;
 
                 if let Some(state) = &mut self.state {
-                    // Move camera
-                    state.camera.fly_move(
-                        dt,
-                        self.input.forward(),
-                        self.input.back(),
-                        self.input.left(),
-                        self.input.right(),
-                        self.input.up(),
-                        self.input.down(),
+                    // Player physics — reads chunk data for collision
+                    self.player.update(dt, &self.input, &state.chunk_manager);
+
+                    // Footstep audio
+                    if let Some(step_id) = self.player.take_step() {
+                        self.audio.play_footstep(step_id);
+                    }
+
+                    // Stream chunks around player
+                    let (pcx, pcz) = self.player.chunk_pos();
+                    state.update_chunks(pcx, pcz);
+
+                    // Update first-person feet
+                    state.update_feet(
+                        self.player.position,
+                        self.player.yaw,
+                        self.player.walk_cycle(),
                     );
 
+                    // Sync camera to player eye position
+                    state.camera.position = self.player.eye_position();
+                    state.camera.yaw = self.player.yaw;
+                    state.camera.pitch = self.player.pitch;
                     state.update_camera();
 
                     match state.render() {
@@ -153,9 +241,7 @@ impl ApplicationHandler for App {
     ) {
         if let DeviceEvent::MouseMotion { delta: (dx, dy) } = event {
             if self.cursor_grabbed {
-                if let Some(state) = &mut self.state {
-                    state.camera.rotate(dx, dy);
-                }
+                self.player.rotate(dx, dy);
             }
         }
     }
@@ -167,10 +253,29 @@ impl ApplicationHandler for App {
     }
 }
 
+// ─── Platform entry points ──────────────────────────────────
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     env_logger::init();
 
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new();
     event_loop.run_app(&mut app).unwrap();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(start)]
+pub fn wasm_main() {
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    console_log::init_with_level(log::Level::Info).expect("could not init logger");
+
+    let event_loop = EventLoop::new().unwrap();
+    let app = App::new();
+
+    use winit::platform::web::EventLoopExtWebSys;
+    event_loop.spawn_app(app);
 }
