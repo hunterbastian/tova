@@ -1,7 +1,7 @@
 use super::block::Block;
 
 pub const CHUNK_SIZE: usize = 16;
-pub const WORLD_HEIGHT: usize = 128;
+pub const WORLD_HEIGHT: usize = 256;
 pub const SEA_LEVEL: usize = 48;
 
 pub struct Chunk {

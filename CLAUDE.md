@@ -54,8 +54,11 @@ tova-engine/
 - **Click** — grab cursor
 - **Esc** — release cursor
 - **WASD / Arrow keys** — move
-- **Space** — fly up
-- **Shift** — fly down
+- **Space** — jump
+- **Shift** — sprint
+- **Ctrl / C** — crouch
+- **R** — toggle rain
+- **N** — toggle snow
 - **Mouse** — look around
 
 ## Migration Status

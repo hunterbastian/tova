@@ -10,6 +10,7 @@ glam = "0.29"
 bytemuck = { version = "1", features = ["derive"] }
 log = "0.4"
 noise = "0.9"
+image = "0.25"
 
 # Native-only
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

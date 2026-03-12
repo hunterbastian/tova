@@ -1,21 +1,27 @@
 use std::collections::HashMap;
 use wgpu::util::DeviceExt;
 
+use crate::props::PropManager;
 use crate::voxel::block::Block;
 use crate::voxel::chunk::{Chunk, CHUNK_SIZE, WORLD_HEIGHT};
 use crate::voxel::mesher::VoxelMesher;
+use super::lod_terrain::LodTerrain;
 use super::terrain::TerrainGen;
 
 pub struct ChunkMesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
+    pub cx: i32,
+    pub cz: i32,
 }
 
 pub struct ChunkManager {
     terrain: TerrainGen,
     chunks: HashMap<(i32, i32), Chunk>,
     meshes: HashMap<(i32, i32), ChunkMesh>,
+    pub props: PropManager,
+    pub lod: LodTerrain,
     render_distance: i32,
 }
 
@@ -25,8 +31,15 @@ impl ChunkManager {
             terrain: TerrainGen::new(),
             chunks: HashMap::new(),
             meshes: HashMap::new(),
+            props: PropManager::new(),
+            lod: LodTerrain::new(render_distance),
             render_distance,
         }
+    }
+
+    pub fn set_render_distance(&mut self, dist: i32) {
+        self.render_distance = dist;
+        self.lod = LodTerrain::new(dist);
     }
 
     /// Get block at world coordinates. Returns Air for unloaded/out-of-bounds.
@@ -64,13 +77,17 @@ impl ChunkManager {
     pub fn update(&mut self, player_cx: i32, player_cz: i32, device: &wgpu::Device) {
         let rd = self.render_distance;
 
-        // Load missing chunks within render distance
+        // Load missing chunks within render distance (max 2 per frame to avoid stalls)
+        let mut loaded = 0;
         for cz in (player_cz - rd)..(player_cz + rd) {
             for cx in (player_cx - rd)..(player_cx + rd) {
                 if !self.chunks.contains_key(&(cx, cz)) {
                     self.load_chunk(cx, cz, device);
+                    loaded += 1;
+                    if loaded >= 2 { break; }
                 }
             }
+            if loaded >= 2 { break; }
         }
 
         // Unload distant chunks (margin to avoid thrashing)
@@ -88,13 +105,18 @@ impl ChunkManager {
         for key in to_remove {
             self.chunks.remove(&key);
             self.meshes.remove(&key);
+            self.props.remove_chunk(key.0, key.1);
         }
+
+        // Update LOD terrain rings
+        self.lod.update(player_cx, player_cz, &self.terrain, device);
     }
 
     fn load_chunk(&mut self, cx: i32, cz: i32, device: &wgpu::Device) {
         let mut chunk = Chunk::new(cx, cz);
         self.terrain.generate(&mut chunk);
 
+        // Generate voxel mesh
         if let Some((vertices, indices)) = VoxelMesher::build(&chunk) {
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("chunk_vertex"),
@@ -112,14 +134,20 @@ impl ChunkManager {
                     vertex_buffer,
                     index_buffer,
                     num_indices: indices.len() as u32,
+                    cx,
+                    cz,
                 },
             );
         }
 
+        // Generate prop meshes (trees, rocks, etc.)
+        let surface_info = TerrainGen::collect_surface_info(&chunk);
+        self.props.generate_chunk(cx, cz, &surface_info, device);
+
         self.chunks.insert((cx, cz), chunk);
     }
 
-    /// Iterate all loaded meshes for rendering.
+    /// Iterate all loaded voxel meshes for rendering.
     pub fn meshes(&self) -> impl Iterator<Item = &ChunkMesh> {
         self.meshes.values()
     }

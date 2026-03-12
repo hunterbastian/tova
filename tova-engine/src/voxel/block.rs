@@ -9,6 +9,9 @@ pub enum Block {
     Sand = 4,
     Water = 5,
     Cobble = 6,
+    Wood = 7,
+    Leaves = 8,
+    Gravel = 9,
 }
 
 impl Block {
@@ -20,22 +23,27 @@ impl Block {
             4 => Block::Sand,
             5 => Block::Water,
             6 => Block::Cobble,
+            7 => Block::Wood,
+            8 => Block::Leaves,
+            9 => Block::Gravel,
             _ => Block::Air,
         }
     }
 
     pub fn is_solid(self) -> bool {
-        !matches!(self, Block::Air | Block::Water)
+        !matches!(self, Block::Air | Block::Water | Block::Wood | Block::Leaves)
     }
-
 }
 
-pub const BLOCK_COLORS: [[f32; 3]; 7] = [
+pub const BLOCK_COLORS: [[f32; 3]; 10] = [
     [0.0, 0.0, 0.0],       // Air (unused)
-    [0.35, 0.38, 0.28],    // Grass — ashy olive, Bitter Coast scrub
-    [0.38, 0.33, 0.25],    // Dirt — Vvardenfell dust
-    [0.40, 0.38, 0.35],    // Stone — dark volcanic grey
-    [0.50, 0.46, 0.36],    // Sand — Azura's Coast beige
-    [0.25, 0.28, 0.30],    // Water — murky, ashfall-tinted
-    [0.42, 0.40, 0.37],    // Cobble — weathered Dwemer stone
+    [0.38, 0.42, 0.28],    // Grass — highland green, slightly richer for new lighting
+    [0.40, 0.34, 0.26],    // Dirt — warm earth
+    [0.42, 0.40, 0.37],    // Stone — volcanic grey with warmth
+    [0.52, 0.48, 0.38],    // Sand — coastal beige
+    [0.24, 0.28, 0.32],    // Water — deep murky blue-grey
+    [0.44, 0.42, 0.39],    // Cobble — weathered stone
+    [0.34, 0.27, 0.18],    // Wood — rich dark bark
+    [0.32, 0.38, 0.22],    // Leaves — olive green, more alive
+    [0.46, 0.43, 0.39],    // Gravel — warm scree
 ];
