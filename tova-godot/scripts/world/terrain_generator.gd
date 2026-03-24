@@ -59,9 +59,9 @@ func _build_terrain_context(seed_val: int) -> void:
 	_offset_z    = _rng.randf() * 1000.0
 	_ridge_offset = _rng.randf() * 800.0 + 200.0
 
-	_forest_center  = Vector3(40.0 + _rng.randf() * 16.0, 0.0, 12.0 + _rng.randf() * 16.0)
-	_castle_center  = Vector3(-14.0 - _rng.randf() * 10.0, 0.0, -44.0 - _rng.randf() * 10.0)
-	_mountain_peak  = Vector3(28.0 + _rng.randf() * 18.0, 0.0, -94.0 - _rng.randf() * 18.0)
+	_forest_center  = Vector3(240.0 + _rng.randf() * 96.0, 0.0, 72.0 + _rng.randf() * 96.0)
+	_castle_center  = Vector3(-84.0 - _rng.randf() * 60.0, 0.0, -264.0 - _rng.randf() * 60.0)
+	_mountain_peak  = Vector3(168.0 + _rng.randf() * 108.0, 0.0, -564.0 - _rng.randf() * 108.0)
 
 	# Sample height at each zone center
 	_forest_center.y = sample_height(_forest_center.x, _forest_center.z)
@@ -79,16 +79,16 @@ func sample_height(x: float, z: float) -> float:
 
 	# Mountain peak lift
 	var peak_distance := Vector2(x - _mountain_peak.x, z - _mountain_peak.z).length()
-	var peak_lift_raw := maxf(0.0, 1.0 - peak_distance / 90.0)
-	var peak_lift := _smootherstep(peak_lift_raw) * 50.0
+	var peak_lift_raw := maxf(0.0, 1.0 - peak_distance / 400.0)
+	var peak_lift := _smootherstep(peak_lift_raw) * 80.0
 
 	# Forest lift
 	var forest_dist := Vector2(x - _forest_center.x, z - _forest_center.z).length()
-	var forest_lift := maxf(0.0, 1.0 - forest_dist / 22.0) * 1.15
+	var forest_lift := maxf(0.0, 1.0 - forest_dist / 132.0) * 3.0
 
 	# Castle lift
 	var castle_dist_lift := Vector2(x - _castle_center.x, z - _castle_center.z).length()
-	var castle_lift := maxf(0.0, 1.0 - castle_dist_lift / 18.0) * 1.8
+	var castle_lift := maxf(0.0, 1.0 - castle_dist_lift / 108.0) * 4.0
 
 	var height := 8.0 + broad + hills + ridge + peak_lift + forest_lift + castle_lift
 
@@ -108,14 +108,14 @@ func sample_height(x: float, z: float) -> float:
 
 	# Castle plateau (world.js: noise(x/30, ...))
 	var castle_distance := Vector2(x - _castle_center.x, z - _castle_center.z).length()
-	if castle_distance < 16.0:
+	if castle_distance < 96.0:
 		var plateau := 12.0 + _noise_broad.get_noise_3d(
 			(x + _offset_x) * (70.0 / 30.0), 0.1, (z + _offset_z) * (70.0 / 30.0)
 		) * 0.32
-		var blend := _smootherstep(castle_distance / 16.0)
+		var blend := _smootherstep(castle_distance / 96.0)
 		height = lerpf(plateau, height, blend)
 
-	# View lane from spawn to castle (world.js: noise(x/20, ...))
+	# View lane from spawn to castle
 	var castle_length_sq := _castle_center.x * _castle_center.x + _castle_center.z * _castle_center.z
 	if castle_length_sq > 0.0:
 		var projection := (x * _castle_center.x + z * _castle_center.z) / castle_length_sq
@@ -123,7 +123,7 @@ func sample_height(x: float, z: float) -> float:
 		var nearest_x := _castle_center.x * clamped_proj
 		var nearest_z := _castle_center.z * clamped_proj
 		var view_distance := Vector2(x - nearest_x, z - nearest_z).length()
-		var in_view_lane := clamped_proj > 0.12 and clamped_proj < 0.88 and view_distance < 12.0
+		var in_view_lane := clamped_proj > 0.12 and clamped_proj < 0.88 and view_distance < 72.0
 
 		if in_view_lane:
 			var lane_target := (
@@ -133,7 +133,7 @@ func sample_height(x: float, z: float) -> float:
 				) * 0.12
 				+ clamped_proj * 0.6
 			)
-			var lane_blend := 1.0 - _smootherstep(view_distance / 12.0)
+			var lane_blend := 1.0 - _smootherstep(view_distance / 72.0)
 			height = lerpf(height, lane_target, lane_blend * 0.82)
 
 	return height
@@ -282,7 +282,7 @@ func _get_vertex_color(x: float, z: float, y: float, seed_val: int) -> Color:
 
 	if spawn_dist < GameState.SPAWN_BLEND_RADIUS + 8:
 		return PALETTE_SPAWN
-	elif forest_dist < 26.0:
+	elif forest_dist < 156.0:
 		return PALETTE_FOREST
 	elif y > 20.0:
 		return PALETTE_HIGHLAND

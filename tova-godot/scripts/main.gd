@@ -61,7 +61,7 @@ func _setup_scene_tree() -> void:
 	camera.name = "Camera3D"
 	camera.fov = 72.0
 	camera.near = 0.1
-	camera.far = 600.0
+	camera.far = 2000.0
 	head.add_child(camera)
 
 	add_child(_player)

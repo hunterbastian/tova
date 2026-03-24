@@ -305,7 +305,7 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 	_rng = RandomNumberGenerator.new()
 	_rng.seed = seed_val ^ 0x1f123bb5
 
-	const TREE_COUNT := 1800
+	const TREE_COUNT := 6000
 
 	# Clearing noise — drives where fields/clearings appear
 	var clearing_noise := FastNoiseLite.new()
@@ -360,7 +360,7 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 
 	var placed := 0
 	var attempts := 0
-	while placed < TREE_COUNT and attempts < 12000:
+	while placed < TREE_COUNT and attempts < 40000:
 		attempts += 1
 		var x := _rng.randf_range(-half + 5.0, half - 5.0)
 		var z := _rng.randf_range(-half + 5.0, half - 5.0)

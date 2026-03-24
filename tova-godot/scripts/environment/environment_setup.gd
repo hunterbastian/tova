@@ -48,7 +48,7 @@ func _setup_world_environment() -> void:
 	env.sdfgi_enabled = true
 	env.sdfgi_use_occlusion = true
 	env.sdfgi_cascade0_distance = 6.4
-	env.sdfgi_max_distance = 200.0
+	env.sdfgi_max_distance = 600.0
 	env.sdfgi_energy = 0.8
 	env.sdfgi_bounce_feedback = 0.3
 	env.sdfgi_normal_bias = 1.1
@@ -56,7 +56,7 @@ func _setup_world_environment() -> void:
 	# ── Fog — warm atmospheric depth ──────────────────────────────────────
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
-	env.fog_density = 0.008
+	env.fog_density = 0.003
 	env.fog_light_color = Color("#9a8a70")
 	env.fog_light_energy = 0.6
 	env.fog_sun_scatter = 0.3
@@ -68,7 +68,7 @@ func _setup_world_environment() -> void:
 	env.volumetric_fog_albedo = Color("#8a8070")
 	env.volumetric_fog_emission = Color("#3a3530")
 	env.volumetric_fog_emission_energy = 0.3
-	env.volumetric_fog_length = 150.0
+	env.volumetric_fog_length = 400.0
 	env.volumetric_fog_sky_affect = 0.0
 
 	# ── Tonemap ───────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ func _setup_sun() -> void:
 	# Shadow — 4 cascades for quality at all distances
 	_sun.shadow_enabled = true
 	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-	_sun.directional_shadow_max_distance = 200.0
+	_sun.directional_shadow_max_distance = 400.0
 	_sun.directional_shadow_split_1 = 0.05
 	_sun.directional_shadow_split_2 = 0.15
 	_sun.directional_shadow_split_3 = 0.4

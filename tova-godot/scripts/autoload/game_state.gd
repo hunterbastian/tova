@@ -3,8 +3,8 @@ extends Node
 # ---------------------------------------------------------------------------
 # Constants (ported from the Three.js version)
 # ---------------------------------------------------------------------------
-const WORLD_SIZE := 220
-const WORLD_SEGMENTS := 400
+const WORLD_SIZE := 1320
+const WORLD_SEGMENTS := 600
 const SPAWN_RADIUS := 14
 const SPAWN_BLEND_RADIUS := 30
 const PLAYER_HEIGHT := 1.8
