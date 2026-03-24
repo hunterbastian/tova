@@ -1,92 +1,137 @@
 extends Node3D
 
-# ---------------------------------------------------------------------------
-# Private references
-# ---------------------------------------------------------------------------
 var _world_env: WorldEnvironment
 var _sun: DirectionalLight3D
+var _fill_light: DirectionalLight3D
 var _spawn_fill_light: OmniLight3D
 var _moon: MeshInstance3D
 
-# ---------------------------------------------------------------------------
-# _ready
-# ---------------------------------------------------------------------------
 func _ready() -> void:
 	_setup_world_environment()
 	_setup_sun()
+	_setup_fill_light()
 	_setup_spawn_fill_light()
 	_setup_moon()
-	#_setup_cloud_volumes()  # disabled for now
 
 # ---------------------------------------------------------------------------
-# WorldEnvironment
+# Environment — sky, GI, fog, post-processing
 # ---------------------------------------------------------------------------
 func _setup_world_environment() -> void:
+	# Sky — warm late-afternoon palette
 	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color("#1a2a3a")
-	sky_material.sky_horizon_color = Color("#4a3a30")
-	sky_material.ground_bottom_color = Color("#0a0a08")
-	sky_material.ground_horizon_color = Color("#2a2018")
-	sky_material.sky_curve = 0.1
-	sky_material.ground_curve = 0.1
+	sky_material.sky_top_color = Color("#4a7aaa")
+	sky_material.sky_horizon_color = Color("#c0a070")
+	sky_material.ground_bottom_color = Color("#3a3530")
+	sky_material.ground_horizon_color = Color("#7a6a58")
+	sky_material.sky_curve = 0.08
+	sky_material.ground_curve = 0.08
+	sky_material.sky_energy_multiplier = 1.0
+	sky_material.ground_energy_multiplier = 0.5
 
 	var sky := Sky.new()
 	sky.sky_material = sky_material
+	sky.radiance_size = Sky.RADIANCE_SIZE_256
 
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
+
+	# ── Ambient light from sky (not flat color) ───────────────────────────
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_energy = 0.8
+
+	# ── Reflected light from sky ──────────────────────────────────────────
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+
+	# ── SDFGI — signed distance field global illumination ─────────────────
+	# Best for open-world: indirect light bounces off terrain, trees, structures
+	env.sdfgi_enabled = true
+	env.sdfgi_use_occlusion = true
+	env.sdfgi_cascade0_distance = 6.4
+	env.sdfgi_max_distance = 200.0
+	env.sdfgi_energy = 0.8
+	env.sdfgi_bounce_feedback = 0.3
+	env.sdfgi_normal_bias = 1.1
+
+	# ── Fog — warm atmospheric depth ──────────────────────────────────────
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
-	env.fog_density = 0.012
-	env.fog_light_color = Color("#3a3228")
-	env.volumetric_fog_enabled = false
-	env.volumetric_fog_density = 0.005
-	env.volumetric_fog_albedo = Color("#2a2a28")
-	env.volumetric_fog_emission = Color("#1a1a18")
-	env.volumetric_fog_length = 200.0
-	env.volumetric_fog_sky_affect = 0.05
-	env.volumetric_fog_gi_inject = 0.0
-	env.tonemap_exposure = 0.9
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#5a5048")
-	env.ambient_light_energy = 0.7
+	env.fog_density = 0.008
+	env.fog_light_color = Color("#9a8a70")
+	env.fog_light_energy = 0.6
+	env.fog_sun_scatter = 0.3
+	env.fog_sky_affect = 0.4
 
-	# SSAO — ambient occlusion for depth in crevices and under trees
+	# ── Tonemap ───────────────────────────────────────────────────────────
+	env.tonemap_exposure = 1.1
+	env.tonemap_white = 6.0
+
+	# ── SSAO — contact shadows in crevices ────────────────────────────────
 	env.ssao_enabled = true
-	env.ssao_radius = 2.0
-	env.ssao_intensity = 1.5
-	env.ssao_power = 1.5
+	env.ssao_radius = 1.5
+	env.ssao_intensity = 2.0
+	env.ssao_power = 1.8
+	env.ssao_light_affect = 0.3
 
-	# SSIL — indirect lighting bounce for more natural light
+	# ── SSIL — screen-space indirect light ────────────────────────────────
 	env.ssil_enabled = true
-	env.ssil_radius = 5.0
-	env.ssil_intensity = 0.8
+	env.ssil_radius = 4.0
+	env.ssil_intensity = 1.0
+	env.ssil_normal_rejection = 1.0
 
-	# Glow — subtle bloom on bright areas (brazier flames, sky horizon)
+	# ── Glow — soft bloom ─────────────────────────────────────────────────
 	env.glow_enabled = true
-	env.glow_intensity = 0.4
-	env.glow_strength = 0.8
-	env.glow_bloom = 0.1
+	env.glow_intensity = 0.3
+	env.glow_strength = 0.6
+	env.glow_bloom = 0.05
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.glow_hdr_threshold = 1.2
+
+	# ── Adjustments — slight color grading ────────────────────────────────
+	env.adjustment_enabled = true
+	env.adjustment_brightness = 1.05
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 1.1
 
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = env
 	add_child(_world_env)
 
 # ---------------------------------------------------------------------------
-# Sun (DirectionalLight3D)
+# Sun — primary directional light with cascaded shadows
 # ---------------------------------------------------------------------------
 func _setup_sun() -> void:
 	_sun = DirectionalLight3D.new()
-	_sun.light_color = Color("#b89070")
-	_sun.light_energy = 1.5
+	_sun.light_color = Color("#f0c888")
+	_sun.light_energy = 2.0
+	_sun.light_indirect_energy = 1.5
+	# Shadow — 4 cascades for quality at all distances
 	_sun.shadow_enabled = true
-	_sun.directional_shadow_max_distance = 280.0
-	_sun.shadow_bias = 0.05
-	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+	_sun.directional_shadow_max_distance = 200.0
+	_sun.directional_shadow_split_1 = 0.05
+	_sun.directional_shadow_split_2 = 0.15
+	_sun.directional_shadow_split_3 = 0.4
+	_sun.directional_shadow_blend_splits = true
+	_sun.shadow_bias = 0.03
+	_sun.shadow_normal_bias = 2.0
+
 	add_child(_sun)
-	_sun.look_at_from_position(Vector3(88.0, 200.0, -24.0), Vector3.ZERO)
+	# Late afternoon angle — sun low in the sky for long shadows
+	_sun.look_at_from_position(Vector3(100.0, 160.0, -40.0), Vector3.ZERO)
+
+# ---------------------------------------------------------------------------
+# Fill light — secondary directional from opposite side (sky bounce)
+# ---------------------------------------------------------------------------
+func _setup_fill_light() -> void:
+	_fill_light = DirectionalLight3D.new()
+	_fill_light.light_color = Color("#7090b0")
+	_fill_light.light_energy = 0.4
+	_fill_light.light_indirect_energy = 0.5
+	_fill_light.shadow_enabled = false
+	add_child(_fill_light)
+	# Opposite of sun — fills shadow side with cool sky bounce
+	_fill_light.look_at_from_position(Vector3(-80.0, 100.0, 60.0), Vector3.ZERO)
 
 # ---------------------------------------------------------------------------
 # Spawn fill light (OmniLight3D)
@@ -101,7 +146,7 @@ func _setup_spawn_fill_light() -> void:
 	add_child(_spawn_fill_light)
 
 # ---------------------------------------------------------------------------
-# Moon (MeshInstance3D)
+# Moon
 # ---------------------------------------------------------------------------
 func _setup_moon() -> void:
 	var sphere := SphereMesh.new()
@@ -119,33 +164,6 @@ func _setup_moon() -> void:
 	_moon.material_override = mat
 	_moon.position = Vector3(-110.0, 92.0, -210.0)
 	add_child(_moon)
-
-# ---------------------------------------------------------------------------
-# Cloud volumes — FogVolume nodes placed high for cloud layer
-# ---------------------------------------------------------------------------
-func _setup_cloud_volumes() -> void:
-	var cloud_mat := FogMaterial.new()
-	cloud_mat.density = 0.15
-	cloud_mat.albedo = Color("#4a4a50")
-
-	# Several cloud patches at high altitude
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 42
-	for i in range(12):
-		var fog_vol := FogVolume.new()
-		fog_vol.shape = RenderingServer.FOG_VOLUME_SHAPE_ELLIPSOID
-		fog_vol.size = Vector3(
-			15.0 + rng.randf() * 25.0,
-			1.5 + rng.randf() * 2.5,
-			12.0 + rng.randf() * 20.0
-		)
-		fog_vol.position = Vector3(
-			-120.0 + rng.randf() * 240.0,
-			180.0 + rng.randf() * 80.0,
-			-120.0 + rng.randf() * 240.0
-		)
-		fog_vol.material = cloud_mat
-		add_child(fog_vol)
 
 # ---------------------------------------------------------------------------
 # Public API
