@@ -103,7 +103,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		regenerate_world()
 
 func regenerate_world() -> void:
-	var seed_val := randi()
+	var seed_val := 0x7A3F1B  # Fixed seed — same world every time
 
 	GameState.reset_state()
 	GameState.seed_value = seed_val
