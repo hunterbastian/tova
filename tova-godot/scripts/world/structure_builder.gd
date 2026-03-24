@@ -411,12 +411,10 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 	canopy_mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(canopy_mmi)
 
-	# Scatter rocks around forest — 28
-	for index in range(28):
-		var angle := _rng.randf() * TAU
-		var distance := 8.0 + _rng.randf() * 24.0
-		var x := fc.x + cos(angle) * distance
-		var z := fc.z + sin(angle) * distance
+	# Scatter rocks across the map — 40
+	for index in range(40):
+		var x := _rng.randf_range(-half + 5.0, half - 5.0)
+		var z := _rng.randf_range(-half + 5.0, half - 5.0)
 		var y: float = terrain.sample_height(x, z)
 		_create_rock(Vector3(x, y, z), 0.45 + _rng.randf() * 0.55)
 

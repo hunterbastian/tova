@@ -259,7 +259,7 @@ func _update_sword(delta: float) -> void:
 	var move_amount := 1.0 if velocity.length_squared() > 0.5 else 0.0
 	var bob_time := _camera_sway_time * 8.0
 	var sway_x := sin(bob_time) * 0.008 * move_amount
-	var sway_y := abs(cos(bob_time)) * 0.005 * move_amount
+	var sway_y := absf(cos(bob_time)) * 0.005 * move_amount
 
 	_sword_anchor.position = Vector3(0.38 + sway_x, -0.35 + sway_y, -0.5)
 	_sword_anchor.rotation = Vector3(
