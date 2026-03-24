@@ -3,12 +3,12 @@ extends MeshInstance3D
 # ---------------------------------------------------------------------------
 # Terrain palette (from world.js lines 11-18)
 # ---------------------------------------------------------------------------
-const PALETTE_GRASS    := Color("#4a6a3a")
-const PALETTE_SPAWN    := Color("#5a7a48")
-const PALETTE_FOREST   := Color("#2a4a22")
-const PALETTE_HIGHLAND := Color("#5a5a4a")
-const PALETTE_SLOPE    := Color("#4a5a3a")
-const PALETTE_DRY      := Color("#3a5a2a")
+const PALETTE_GRASS    := Color("#5a8a48")
+const PALETTE_SPAWN    := Color("#6a9a56")
+const PALETTE_FOREST   := Color("#3a6a2a")
+const PALETTE_HIGHLAND := Color("#5a6a4a")
+const PALETTE_SLOPE    := Color("#4a7a3a")
+const PALETTE_DRY      := Color("#4a6a32")
 
 # ---------------------------------------------------------------------------
 # Member variables

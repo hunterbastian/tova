@@ -442,12 +442,45 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		add_child(mmi)
 
-	# Scatter rocks across the map — 40
-	for index in range(40):
+	# Scatter rocks across the map — 60
+	for index in range(60):
 		var x := _rng.randf_range(-half + 5.0, half - 5.0)
 		var z := _rng.randf_range(-half + 5.0, half - 5.0)
 		var y: float = terrain.sample_height(x, z)
 		_create_rock(Vector3(x, y, z), 0.45 + _rng.randf() * 0.55)
+
+	# Ground grass — thousands of small blades across the map
+	var grass_blade := CylinderMesh.new()
+	grass_blade.top_radius = 0.0
+	grass_blade.bottom_radius = 0.06
+	grass_blade.height = 0.4
+	grass_blade.radial_segments = 3
+
+	const GRASS_COUNT := 8000
+	var grass_mm := MultiMesh.new()
+	grass_mm.mesh = grass_blade
+	grass_mm.transform_format = MultiMesh.TRANSFORM_3D
+	grass_mm.instance_count = GRASS_COUNT
+
+	for gi in range(GRASS_COUNT):
+		var gx := _rng.randf_range(-half + 2.0, half - 2.0)
+		var gz := _rng.randf_range(-half + 2.0, half - 2.0)
+		var gy: float = terrain.sample_height(gx, gz)
+		var blade_height := 0.3 + _rng.randf() * 0.35
+		var blade_lean := (_rng.randf() - 0.5) * 0.3
+		var basis := Basis(Vector3.UP, _rng.randf() * TAU) * Basis.from_scale(Vector3(
+			0.6 + _rng.randf() * 0.5,
+			blade_height / 0.4,
+			0.6 + _rng.randf() * 0.5
+		))
+		basis = basis.rotated(Vector3.RIGHT, blade_lean)
+		grass_mm.set_instance_transform(gi, Transform3D(basis, Vector3(gx, gy + blade_height * 0.4, gz)))
+
+	var grass_mmi := MultiMeshInstance3D.new()
+	grass_mmi.multimesh = grass_mm
+	grass_mmi.material_override = _create_flat_material("#4a7a38")
+	grass_mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(grass_mmi)
 
 
 # ---------------------------------------------------------------------------
