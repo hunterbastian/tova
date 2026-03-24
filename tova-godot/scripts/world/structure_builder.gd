@@ -1,0 +1,583 @@
+extends Node3D
+
+# ---------------------------------------------------------------------------
+# Member variables
+# ---------------------------------------------------------------------------
+var _rng: RandomNumberGenerator
+
+
+# ---------------------------------------------------------------------------
+# Material helpers
+# ---------------------------------------------------------------------------
+func _create_flat_material(color: String, roughness: float = 0.96, metalness: float = 0.02) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(color)
+	mat.roughness = roughness
+	mat.metallic = metalness
+	return mat
+
+
+func _create_unshaded_material(color: String) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(color)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return mat
+
+
+# ---------------------------------------------------------------------------
+# Rock helper — port of createRock (world.js 287-310)
+# ---------------------------------------------------------------------------
+func _create_rock(pos: Vector3, scale_val: float, color: String = "#6e6a63") -> void:
+	var mesh_inst := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 1.0
+	sphere.height = 2.0
+	sphere.rings = 3
+	sphere.radial_segments = 5
+	mesh_inst.mesh = sphere
+	mesh_inst.material_override = _create_flat_material(color)
+	mesh_inst.position = pos
+	mesh_inst.scale = Vector3.ONE * scale_val
+	mesh_inst.rotation = Vector3(_rng.randf() * PI, _rng.randf() * PI, _rng.randf() * PI)
+	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	add_child(mesh_inst)
+
+	# Collision
+	var body := StaticBody3D.new()
+	body.position = pos
+	var col := CollisionShape3D.new()
+	var shape := CylinderShape3D.new()
+	shape.radius = scale_val * 0.55
+	shape.height = scale_val * 2.0
+	col.shape = shape
+	body.add_child(col)
+	add_child(body)
+
+
+# ---------------------------------------------------------------------------
+# Brazier helper — port of createBrazier (world.js 312-337)
+# ---------------------------------------------------------------------------
+func _create_brazier(pos: Vector3) -> void:
+	var brazier := Node3D.new()
+	brazier.position = pos
+
+	# Bowl
+	var bowl_mesh := CylinderMesh.new()
+	bowl_mesh.top_radius = 0.22
+	bowl_mesh.bottom_radius = 0.3
+	bowl_mesh.height = 0.24
+	bowl_mesh.radial_segments = 8
+	var bowl := MeshInstance3D.new()
+	bowl.mesh = bowl_mesh
+	bowl.material_override = _create_flat_material("#50443a")
+	bowl.position.y = 1.25
+	bowl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	brazier.add_child(bowl)
+
+	# Stem
+	var stem_mesh := CylinderMesh.new()
+	stem_mesh.top_radius = 0.06
+	stem_mesh.bottom_radius = 0.08
+	stem_mesh.height = 1.1
+	stem_mesh.radial_segments = 6
+	var stem := MeshInstance3D.new()
+	stem.mesh = stem_mesh
+	stem.material_override = _create_flat_material("#70645a")
+	stem.position.y = 0.55
+	stem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	brazier.add_child(stem)
+
+	# Flame
+	var flame_mesh := SphereMesh.new()
+	flame_mesh.radius = 0.14
+	flame_mesh.height = 0.28
+	flame_mesh.rings = 10
+	flame_mesh.radial_segments = 12
+	var flame := MeshInstance3D.new()
+	flame.mesh = flame_mesh
+	flame.material_override = _create_unshaded_material("#f6c56d")
+	flame.position.y = 1.32
+	brazier.add_child(flame)
+
+	# Light
+	var light := OmniLight3D.new()
+	light.light_color = Color("#f0bf63")
+	light.light_energy = 1.2
+	light.omni_range = 13.0
+	light.omni_attenuation = 2.0
+	light.position.y = 1.5
+	brazier.add_child(light)
+
+	add_child(brazier)
+
+
+# ---------------------------------------------------------------------------
+# Collider helpers
+# ---------------------------------------------------------------------------
+func _add_box_collider(pos: Vector3, half_x: float, half_z: float, half_y: float = 5.0) -> void:
+	var body := StaticBody3D.new()
+	body.position = pos
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(half_x * 2.0, half_y * 2.0, half_z * 2.0)
+	col.shape = shape
+	body.add_child(col)
+	add_child(body)
+
+
+func _add_cylinder_collider(pos: Vector3, radius: float, height: float = 10.0) -> void:
+	var body := StaticBody3D.new()
+	body.position = pos
+	var col := CollisionShape3D.new()
+	var shape := CylinderShape3D.new()
+	shape.radius = radius
+	shape.height = height
+	col.shape = shape
+	body.add_child(col)
+	add_child(body)
+
+
+# ---------------------------------------------------------------------------
+# build_spawn_sanctum — port of buildSpawnSanctum (world.js 339-451)
+# ---------------------------------------------------------------------------
+func build_spawn_sanctum(seed_val: int, terrain: MeshInstance3D) -> void:
+	_rng = RandomNumberGenerator.new()
+	_rng.seed = seed_val ^ 0xa7810d3f
+
+	var shrine_x := 7.6 + _rng.randf() * 1.4
+	var shrine_z := 2.4 + _rng.randf() * 1.2
+	var shrine_y := terrain.sample_height(shrine_x, shrine_z)
+
+	var shrine := Node3D.new()
+	shrine.position = Vector3(shrine_x, shrine_y, shrine_z)
+
+	# Dais
+	var dais_mesh := CylinderMesh.new()
+	dais_mesh.top_radius = 1.7
+	dais_mesh.bottom_radius = 2.1
+	dais_mesh.height = 0.72
+	dais_mesh.radial_segments = 10
+	var dais := MeshInstance3D.new()
+	dais.mesh = dais_mesh
+	dais.material_override = _create_flat_material("#84796f")
+	dais.position.y = 0.36
+	dais.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	shrine.add_child(dais)
+
+	# Altar
+	var altar_mesh := BoxMesh.new()
+	altar_mesh.size = Vector3(0.86, 1.28, 0.86)
+	var altar := MeshInstance3D.new()
+	altar.mesh = altar_mesh
+	altar.material_override = _create_flat_material("#84796f")
+	altar.position.y = 1.05
+	altar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	shrine.add_child(altar)
+
+	# Stele
+	var stele_mesh := BoxMesh.new()
+	stele_mesh.size = Vector3(1.2, 2.8, 0.34)
+	var stele := MeshInstance3D.new()
+	stele.mesh = stele_mesh
+	stele.material_override = _create_flat_material("#84796f")
+	stele.position = Vector3(0.0, 1.8, 1.1)
+	stele.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	shrine.add_child(stele)
+
+	# Arch left post
+	var arch_post_mesh := BoxMesh.new()
+	arch_post_mesh.size = Vector3(0.28, 2.2, 0.28)
+	var arch_left := MeshInstance3D.new()
+	arch_left.mesh = arch_post_mesh
+	arch_left.material_override = _create_flat_material("#84796f")
+	arch_left.position = Vector3(-0.95, 1.4, 0.82)
+	arch_left.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	shrine.add_child(arch_left)
+
+	# Arch right post
+	var arch_right := MeshInstance3D.new()
+	arch_right.mesh = arch_post_mesh
+	arch_right.material_override = _create_flat_material("#84796f")
+	arch_right.position = Vector3(0.95, 1.4, 0.82)
+	arch_right.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	shrine.add_child(arch_right)
+
+	# Arch cap
+	var arch_cap_mesh := BoxMesh.new()
+	arch_cap_mesh.size = Vector3(2.18, 0.26, 0.28)
+	var arch_cap := MeshInstance3D.new()
+	arch_cap.mesh = arch_cap_mesh
+	arch_cap.material_override = _create_flat_material("#84796f")
+	arch_cap.position = Vector3(0.0, 2.45, 0.82)
+	arch_cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	shrine.add_child(arch_cap)
+
+	add_child(shrine)
+
+	# Sword pickup position
+	GameState.sword_pickup_position = Vector3(shrine_x, shrine_y + 1.6, shrine_z)
+
+	# Shrine colliders (world-space)
+	_add_box_collider(Vector3(shrine_x, shrine_y, shrine_z), 0.5, 0.5)
+	_add_box_collider(Vector3(shrine_x, shrine_y, shrine_z + 1.1), 0.65, 0.2)
+	_add_cylinder_collider(Vector3(shrine_x - 0.95, shrine_y, shrine_z + 0.82), 0.2)
+	_add_cylinder_collider(Vector3(shrine_x + 0.95, shrine_y, shrine_z + 0.82), 0.2)
+
+	# Braziers
+	_create_brazier(Vector3(shrine_x - 1.7, shrine_y + 0.02, shrine_z + 0.8))
+	_create_brazier(Vector3(shrine_x + 1.7, shrine_y + 0.02, shrine_z + 0.8))
+
+	# Path stones — 5 lerped from origin to shrine
+	var path_stone_mat := _create_flat_material("#84796f")
+	for index in range(5):
+		var t := float(index) / 6.0
+		var px := lerpf(0.0, shrine_x, t)
+		var pz := lerpf(0.0, shrine_z, t)
+		var py := terrain.sample_height(px, pz) + 0.05
+		var stone_mesh := BoxMesh.new()
+		stone_mesh.size = Vector3(
+			0.44 + _rng.randf() * 0.18,
+			0.12,
+			0.62 + _rng.randf() * 0.22
+		)
+		var stone := MeshInstance3D.new()
+		stone.mesh = stone_mesh
+		stone.material_override = path_stone_mat
+		stone.position = Vector3(px, py, pz)
+		stone.rotation.y = _rng.randf() * PI
+		stone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		add_child(stone)
+
+	# Scatter rocks around spawn — 14
+	for index in range(14):
+		var angle := _rng.randf() * TAU
+		var dist := GameState.SPAWN_RADIUS + 2.0 + _rng.randf() * (GameState.SPAWN_BLEND_RADIUS - GameState.SPAWN_RADIUS + 6.0)
+		var rx := cos(angle) * dist
+		var rz := sin(angle) * dist
+		var ry := terrain.sample_height(rx, rz)
+		_create_rock(Vector3(rx, ry, rz), 0.25 + _rng.randf() * 0.45)
+
+	# Grass tufts — 180 instanced
+	var grass_mm := MultiMesh.new()
+	var grass_cone := ConeMesh.new()
+	grass_cone.radius = 0.15
+	grass_cone.height = 0.55
+	grass_cone.radial_segments = 4
+	grass_mm.mesh = grass_cone
+	grass_mm.transform_format = MultiMesh.TRANSFORM_3D
+	grass_mm.instance_count = 180
+
+	for index in range(180):
+		var angle := _rng.randf() * TAU
+		var dist := 1.5 + _rng.randf() * (GameState.SPAWN_BLEND_RADIUS + 10.0)
+		var gx := cos(angle) * dist
+		var gz := sin(angle) * dist
+		var gy := terrain.sample_height(gx, gz)
+		var basis := Basis.from_scale(Vector3(
+			0.6 + _rng.randf() * 0.6,
+			0.7 + _rng.randf() * 0.8,
+			0.6 + _rng.randf() * 0.6
+		))
+		basis = basis.rotated(Vector3.UP, _rng.randf() * TAU)
+		var t3d := Transform3D(basis, Vector3(gx, gy + 0.22, gz))
+		grass_mm.set_instance_transform(index, t3d)
+
+	var grass_mmi := MultiMeshInstance3D.new()
+	grass_mmi.multimesh = grass_mm
+	grass_mmi.material_override = _create_flat_material("#9a8a68")
+	add_child(grass_mmi)
+
+
+# ---------------------------------------------------------------------------
+# build_forest — port of buildForest (world.js 454-515)
+# ---------------------------------------------------------------------------
+func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
+	_rng = RandomNumberGenerator.new()
+	_rng.seed = seed_val ^ 0x1f123bb5
+
+	const TREE_COUNT := 220
+
+	# Trunk MultiMesh
+	var trunk_mesh := CylinderMesh.new()
+	trunk_mesh.top_radius = 0.18
+	trunk_mesh.bottom_radius = 0.28
+	trunk_mesh.height = 2.8
+	trunk_mesh.radial_segments = 7
+
+	var trunk_mm := MultiMesh.new()
+	trunk_mm.mesh = trunk_mesh
+	trunk_mm.transform_format = MultiMesh.TRANSFORM_3D
+	trunk_mm.instance_count = TREE_COUNT
+
+	# Canopy MultiMesh
+	var canopy_mesh := ConeMesh.new()
+	canopy_mesh.radius = 1.35
+	canopy_mesh.height = 3.8
+	canopy_mesh.radial_segments = 8
+
+	var canopy_mm := MultiMesh.new()
+	canopy_mm.mesh = canopy_mesh
+	canopy_mm.transform_format = MultiMesh.TRANSFORM_3D
+	canopy_mm.instance_count = TREE_COUNT
+
+	var fc := GameState.forest_center
+	var cc := GameState.castle_center
+
+	var placed := 0
+	var attempts := 0
+	while placed < TREE_COUNT and attempts < 2000:
+		attempts += 1
+		var angle := _rng.randf() * TAU
+		var distance := 4.0 + sqrt(_rng.randf()) * 18.0
+		var x := fc.x + cos(angle) * distance
+		var z := fc.z + sin(angle) * distance
+		var spawn_distance := Vector2(x, z).length()
+		var castle_distance := Vector2(x - cc.x, z - cc.z).length()
+		if spawn_distance < GameState.SPAWN_BLEND_RADIUS + 4.0 or castle_distance < 16.0:
+			continue
+
+		var y := terrain.sample_height(x, z)
+		var trunk_height := 2.0 + _rng.randf() * 1.6
+		var canopy_height := 3.1 + _rng.randf() * 1.4
+		var canopy_scale := 0.8 + _rng.randf() * 0.55
+
+		# Trunk transform
+		var trunk_basis := Basis.from_scale(Vector3(1.0, trunk_height / 2.8, 1.0))
+		trunk_mm.set_instance_transform(placed, Transform3D(trunk_basis, Vector3(x, y + trunk_height * 0.5, z)))
+
+		# Canopy transform
+		var canopy_basis := Basis.from_scale(Vector3(canopy_scale, canopy_height / 3.8, canopy_scale))
+		canopy_mm.set_instance_transform(placed, Transform3D(canopy_basis, Vector3(x, y + trunk_height + canopy_height * 0.42, z)))
+
+		# Collision
+		_add_cylinder_collider(Vector3(x, y, z), 0.38)
+
+		placed += 1
+
+	var trunk_mmi := MultiMeshInstance3D.new()
+	trunk_mmi.multimesh = trunk_mm
+	trunk_mmi.material_override = _create_flat_material("#5a4838")
+	trunk_mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	add_child(trunk_mmi)
+
+	var canopy_mmi := MultiMeshInstance3D.new()
+	canopy_mmi.multimesh = canopy_mm
+	canopy_mmi.material_override = _create_flat_material("#7a8060")
+	canopy_mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	add_child(canopy_mmi)
+
+	# Scatter rocks around forest — 28
+	for index in range(28):
+		var angle := _rng.randf() * TAU
+		var distance := 8.0 + _rng.randf() * 24.0
+		var x := fc.x + cos(angle) * distance
+		var z := fc.z + sin(angle) * distance
+		var y := terrain.sample_height(x, z)
+		_create_rock(Vector3(x, y, z), 0.45 + _rng.randf() * 0.55)
+
+
+# ---------------------------------------------------------------------------
+# build_castle — port of buildCastle (world.js 517-613)
+# ---------------------------------------------------------------------------
+func build_castle(seed_val: int, terrain: MeshInstance3D) -> void:
+	_rng = RandomNumberGenerator.new()
+	_rng.seed = seed_val ^ 0x9e3779b9
+
+	var cx := GameState.castle_center.x
+	var cz := GameState.castle_center.z
+	var base_y := terrain.sample_height(cx, cz)
+
+	var wall_mat := _create_flat_material("#68675f", 0.95, 0.03)
+	var roof_mat := _create_flat_material("#3f3933", 0.92, 0.01)
+
+	var castle := Node3D.new()
+	castle.position = Vector3(cx, base_y, cz)
+
+	# Courtyard
+	var courtyard_mesh := BoxMesh.new()
+	courtyard_mesh.size = Vector3(22.0, 1.9, 18.0)
+	var courtyard := MeshInstance3D.new()
+	courtyard.mesh = courtyard_mesh
+	courtyard.material_override = wall_mat
+	courtyard.position.y = 0.8
+	courtyard.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	castle.add_child(courtyard)
+
+	# Wall segments
+	var wall_data: Array = [
+		[Vector3(22.0, 5.8, 1.3),  Vector3(0.0, 3.8, -8.4)],
+		[Vector3(22.0, 5.8, 1.3),  Vector3(0.0, 3.8, 8.4)],
+		[Vector3(1.3, 5.8, 15.5),  Vector3(-10.3, 3.8, 0.0)],
+		[Vector3(1.3, 5.8, 15.5),  Vector3(10.3, 3.8, 0.0)],
+		[Vector3(8.4, 8.6, 6.6),   Vector3(0.0, 5.4, 0.5)],
+	]
+	for entry in wall_data:
+		var wall_mesh := BoxMesh.new()
+		wall_mesh.size = entry[0]
+		var wall := MeshInstance3D.new()
+		wall.mesh = wall_mesh
+		wall.material_override = wall_mat
+		wall.position = entry[1]
+		wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		castle.add_child(wall)
+
+	# Corner towers
+	var tower_offsets: Array = [
+		Vector3(-9.4, 0.0, -7.7),
+		Vector3(9.4, 0.0, -7.7),
+		Vector3(-9.4, 0.0, 7.7),
+		Vector3(9.4, 0.0, 7.7),
+	]
+	for offset in tower_offsets:
+		var tower_mesh := CylinderMesh.new()
+		tower_mesh.top_radius = 1.95
+		tower_mesh.bottom_radius = 2.15
+		tower_mesh.height = 11.4
+		tower_mesh.radial_segments = 10
+		var tower := MeshInstance3D.new()
+		tower.mesh = tower_mesh
+		tower.material_override = wall_mat
+		tower.position = Vector3(offset.x, 5.7 + offset.y, offset.z)
+		tower.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		castle.add_child(tower)
+
+		var roof_mesh := ConeMesh.new()
+		roof_mesh.radius = 2.85
+		roof_mesh.height = 3.8
+		roof_mesh.radial_segments = 10
+		var roof := MeshInstance3D.new()
+		roof.mesh = roof_mesh
+		roof.material_override = roof_mat
+		roof.position = Vector3(offset.x, 12.8 + offset.y, offset.z)
+		roof.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		castle.add_child(roof)
+
+	# Gate
+	var gate_mesh := BoxMesh.new()
+	gate_mesh.size = Vector3(5.1, 5.4, 1.5)
+	var gate := MeshInstance3D.new()
+	gate.mesh = gate_mesh
+	gate.material_override = roof_mat
+	gate.position = Vector3(0.0, 3.1, 8.5)
+	gate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	castle.add_child(gate)
+
+	add_child(castle)
+
+	# Colliders (world-space)
+	# Back wall
+	_add_box_collider(Vector3(cx, base_y, cz - 8.4), 11.0, 0.65)
+	# Front wall — split for gate opening
+	_add_box_collider(Vector3(cx - 6.775, base_y, cz + 8.4), 4.225, 0.65)
+	_add_box_collider(Vector3(cx + 6.775, base_y, cz + 8.4), 4.225, 0.65)
+	# Side walls
+	_add_box_collider(Vector3(cx - 10.3, base_y, cz), 0.65, 7.75)
+	_add_box_collider(Vector3(cx + 10.3, base_y, cz), 0.65, 7.75)
+	# Keep
+	_add_box_collider(Vector3(cx, base_y, cz + 0.5), 4.2, 3.3)
+	# Corner tower cylinders
+	for offset in tower_offsets:
+		_add_cylinder_collider(Vector3(cx + offset.x, base_y, cz + offset.z), 2.2)
+
+	# Scatter rocks around castle — 10
+	for index in range(10):
+		var angle := _rng.randf() * TAU
+		var distance := 14.0 + _rng.randf() * 12.0
+		var x := cx + cos(angle) * distance
+		var z := cz + sin(angle) * distance
+		var y := terrain.sample_height(x, z)
+		_create_rock(Vector3(x, y, z), 0.5 + _rng.randf() * 0.7, "#7a756c")
+
+
+# ---------------------------------------------------------------------------
+# build_haze — port of buildHazeAndLandmarks (world.js 615-668)
+# ---------------------------------------------------------------------------
+func build_haze(seed_val: int, terrain: MeshInstance3D) -> void:
+	_rng = RandomNumberGenerator.new()
+	_rng.seed = seed_val ^ 0x53142fcd
+
+	# Mist material — transparent, no depth write
+	var mist_mat := StandardMaterial3D.new()
+	mist_mat.albedo_color = Color("#d0c0a8")
+	mist_mat.albedo_color.a = 0.18
+	mist_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mist_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	mist_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	# 12 mist spheres
+	for index in range(12):
+		var sphere_mesh := SphereMesh.new()
+		sphere_mesh.radius = 10.0 + _rng.randf() * 12.0
+		sphere_mesh.height = (10.0 + _rng.randf() * 12.0) * 2.0
+		sphere_mesh.rings = 18
+		sphere_mesh.radial_segments = 14
+		var sphere := MeshInstance3D.new()
+		sphere.mesh = sphere_mesh
+		sphere.material_override = mist_mat
+		sphere.position = Vector3(
+			-40.0 + _rng.randf() * 120.0,
+			12.0 + _rng.randf() * 10.0,
+			-20.0 + _rng.randf() * 120.0
+		)
+		sphere.scale = Vector3(1.7, 0.44, 1.1)
+		add_child(sphere)
+
+	# Obelisk
+	var obelisk_mesh := BoxMesh.new()
+	obelisk_mesh.size = Vector3(2.4, 9.0, 2.4)
+	var obelisk := MeshInstance3D.new()
+	obelisk.mesh = obelisk_mesh
+	obelisk.material_override = _create_flat_material("#7c6f5d")
+	obelisk.position = Vector3(22.0, terrain.sample_height(22.0, 12.0) + 4.5, 12.0)
+	obelisk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	add_child(obelisk)
+
+	_add_box_collider(Vector3(22.0, terrain.sample_height(22.0, 12.0), 12.0), 1.3, 1.3)
+
+	# Ruins — 3 groups, each with 2 pillars + lintel
+	var ruin_mat := _create_flat_material("#756857")
+	for index in range(3):
+		var origin_x := -18.0 + _rng.randf() * 52.0
+		var origin_z := 28.0 + _rng.randf() * 46.0
+		var origin_y := terrain.sample_height(origin_x, origin_z)
+
+		var ruin := Node3D.new()
+		ruin.position = Vector3(origin_x, origin_y, origin_z)
+
+		# Left pillar
+		var pillar_mesh := BoxMesh.new()
+		pillar_mesh.size = Vector3(0.42, 3.4, 0.48)
+		var left_pillar := MeshInstance3D.new()
+		left_pillar.mesh = pillar_mesh
+		left_pillar.material_override = ruin_mat
+		left_pillar.position = Vector3(-1.2, 1.7, 0.0)
+		left_pillar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		ruin.add_child(left_pillar)
+
+		# Right pillar
+		var right_pillar := MeshInstance3D.new()
+		right_pillar.mesh = pillar_mesh
+		right_pillar.material_override = ruin_mat
+		right_pillar.position = Vector3(1.2, 1.7, 0.0)
+		right_pillar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		ruin.add_child(right_pillar)
+
+		# Lintel
+		var lintel_mesh := BoxMesh.new()
+		lintel_mesh.size = Vector3(2.8, 0.42, 0.52)
+		var lintel := MeshInstance3D.new()
+		lintel.mesh = lintel_mesh
+		lintel.material_override = ruin_mat
+		lintel.position = Vector3(0.0, 3.3, 0.0)
+		lintel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		ruin.add_child(lintel)
+
+		add_child(ruin)
+
+
+# ---------------------------------------------------------------------------
+# clear_structures — free all children
+# ---------------------------------------------------------------------------
+func clear_structures() -> void:
+	for child in get_children():
+		child.queue_free()
