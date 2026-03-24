@@ -7,18 +7,18 @@ var _player: CharacterBody3D
 
 func _ready() -> void:
 	_setup_scene_tree()
-	regenerate_world()
+	# Defer first world gen so all scripts are fully initialized
+	call_deferred("regenerate_world")
 
 func _setup_scene_tree() -> void:
-	# Preload scripts
-	var env_script := load("res://scripts/environment/environment_setup.gd")
-	var terrain_script := load("res://scripts/world/terrain_generator.gd")
-	var structure_script := load("res://scripts/world/structure_builder.gd")
+	# Create nodes using script's new() so the script is baked in from creation
+	var EnvScript := preload("res://scripts/environment/environment_setup.gd")
+	var TerrainScript := preload("res://scripts/world/terrain_generator.gd")
+	var StructureScript := preload("res://scripts/world/structure_builder.gd")
 
 	# Environment
-	_environment = Node3D.new()
+	_environment = EnvScript.new()
 	_environment.name = "Environment"
-	_environment.set_script(env_script)
 	add_child(_environment)
 
 	# World container
@@ -26,17 +26,15 @@ func _setup_scene_tree() -> void:
 	world.name = "World"
 	add_child(world)
 
-	# Terrain (MeshInstance3D)
-	_terrain = MeshInstance3D.new()
+	# Terrain
+	_terrain = TerrainScript.new()
 	_terrain.name = "TerrainMesh"
 	world.add_child(_terrain)
-	_terrain.set_script(terrain_script)
 
-	# Structures container
-	_structures = Node3D.new()
+	# Structures
+	_structures = StructureScript.new()
 	_structures.name = "Structures"
 	world.add_child(_structures)
-	_structures.set_script(structure_script)
 
 	# Player (CharacterBody3D)
 	_player = CharacterBody3D.new()
