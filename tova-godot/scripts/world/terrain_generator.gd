@@ -73,14 +73,14 @@ func _build_terrain_context(seed_val: int) -> void:
 # sample_height — core height function (world.js 148-199)
 # ---------------------------------------------------------------------------
 func sample_height(x: float, z: float) -> float:
-	var broad := _noise_broad.get_noise_3d(x + _offset_x, 0.15, z + _offset_z) * 28.0
-	var hills := _noise_hills.get_noise_3d(x + _offset_x, 0.32, z + _offset_z) * 16.0
-	var ridge := _noise_ridge.get_noise_3d(x - _ridge_offset, 0.52, z + _ridge_offset * 0.35) * 8.0
+	var broad := _noise_broad.get_noise_3d(x + _offset_x, 0.15, z + _offset_z) * 20.0
+	var hills := _noise_hills.get_noise_3d(x + _offset_x, 0.32, z + _offset_z) * 8.0
+	var ridge := _noise_ridge.get_noise_3d(x - _ridge_offset, 0.52, z + _ridge_offset * 0.35) * 3.0
 
-	# Mountain peak lift
+	# Mountain peak lift — tall peaks rising from gentle terrain
 	var peak_distance := Vector2(x - _mountain_peak.x, z - _mountain_peak.z).length()
-	var peak_lift_raw := maxf(0.0, 1.0 - peak_distance / 400.0)
-	var peak_lift := _smootherstep(peak_lift_raw) * 80.0
+	var peak_lift_raw := maxf(0.0, 1.0 - peak_distance / 500.0)
+	var peak_lift := _smootherstep(peak_lift_raw) * 200.0
 
 	# Forest lift
 	var forest_dist := Vector2(x - _forest_center.x, z - _forest_center.z).length()

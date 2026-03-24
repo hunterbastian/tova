@@ -313,41 +313,42 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 	clearing_noise.frequency = 0.02
 	clearing_noise.seed = seed_val
 
-	# Trunk MultiMesh — tapered, more segments for smoother look
+	# Skyrim-style boreal pine: tall trunk + 4 tiered branch layers
+	# Trunk — tall, tapered
 	var trunk_mesh := CylinderMesh.new()
-	trunk_mesh.top_radius = 0.14
-	trunk_mesh.bottom_radius = 0.32
-	trunk_mesh.height = 2.8
-	trunk_mesh.radial_segments = 8
+	trunk_mesh.top_radius = 0.12
+	trunk_mesh.bottom_radius = 0.4
+	trunk_mesh.height = 1.0  # scaled per-instance
+	trunk_mesh.radial_segments = 6
 
 	var trunk_mm := MultiMesh.new()
 	trunk_mm.mesh = trunk_mesh
 	trunk_mm.transform_format = MultiMesh.TRANSFORM_3D
 	trunk_mm.instance_count = TREE_COUNT
 
-	# Upper canopy — narrow top cone
-	var canopy_top_mesh := CylinderMesh.new()
-	canopy_top_mesh.top_radius = 0.0
-	canopy_top_mesh.bottom_radius = 1.0
-	canopy_top_mesh.height = 2.8
-	canopy_top_mesh.radial_segments = 8
+	# 4 canopy tiers — each a cone, progressively smaller toward top
+	# Tier 1 (bottom): widest
+	# Tier 2: medium
+	# Tier 3: narrow
+	# Tier 4 (top): pointed cap
+	var tier_meshes: Array[CylinderMesh] = []
+	var tier_radii := [2.2, 1.7, 1.2, 0.6]
+	var tier_heights := [2.0, 1.8, 1.5, 1.2]
+	var tier_mms: Array[MultiMesh] = []
 
-	var canopy_top_mm := MultiMesh.new()
-	canopy_top_mm.mesh = canopy_top_mesh
-	canopy_top_mm.transform_format = MultiMesh.TRANSFORM_3D
-	canopy_top_mm.instance_count = TREE_COUNT
+	for i in range(4):
+		var m := CylinderMesh.new()
+		m.top_radius = tier_radii[i] * 0.15  # slight taper, not pure cone
+		m.bottom_radius = tier_radii[i]
+		m.height = tier_heights[i]
+		m.radial_segments = 7
+		tier_meshes.append(m)
 
-	# Lower canopy — wider base cone for layered pine look
-	var canopy_low_mesh := CylinderMesh.new()
-	canopy_low_mesh.top_radius = 0.15
-	canopy_low_mesh.bottom_radius = 1.6
-	canopy_low_mesh.height = 2.2
-	canopy_low_mesh.radial_segments = 8
-
-	var canopy_low_mm := MultiMesh.new()
-	canopy_low_mm.mesh = canopy_low_mesh
-	canopy_low_mm.transform_format = MultiMesh.TRANSFORM_3D
-	canopy_low_mm.instance_count = TREE_COUNT
+		var mm := MultiMesh.new()
+		mm.mesh = m
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.instance_count = TREE_COUNT
+		tier_mms.append(mm)
 
 	var cc := GameState.castle_center
 	var half := float(GameState.WORLD_SIZE) / 2.0
@@ -383,25 +384,25 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 			continue
 
 		var y: float = terrain.sample_height(x, z)
-		var trunk_height := 2.0 + _rng.randf() * 1.6
-		var canopy_height := 3.1 + _rng.randf() * 1.4
-		var canopy_scale := 0.8 + _rng.randf() * 0.55
+		var trunk_height := 4.0 + _rng.randf() * 4.0  # taller trunks (4-8 units)
+		var tree_scale := 0.7 + _rng.randf() * 0.6  # overall size variation
 
-		# Trunk
+		# Trunk — tall and tapered
 		trunk_mm.set_instance_transform(placed, Transform3D(
-			Basis.from_scale(Vector3(1.0, trunk_height / 2.8, 1.0)),
+			Basis.from_scale(Vector3(tree_scale, trunk_height, tree_scale)),
 			Vector3(x, y + trunk_height * 0.5, z)
 		))
-		# Upper canopy (narrow top)
-		canopy_top_mm.set_instance_transform(placed, Transform3D(
-			Basis.from_scale(Vector3(canopy_scale * 0.85, canopy_height / 2.8, canopy_scale * 0.85)),
-			Vector3(x, y + trunk_height + canopy_height * 0.55, z)
-		))
-		# Lower canopy (wider base)
-		canopy_low_mm.set_instance_transform(placed, Transform3D(
-			Basis.from_scale(Vector3(canopy_scale, canopy_height / 2.8, canopy_scale)),
-			Vector3(x, y + trunk_height + canopy_height * 0.15, z)
-		))
+
+		# 4 canopy tiers stacked up the trunk
+		var canopy_start := y + trunk_height * 0.45  # branches start partway up
+		var tier_spacing := trunk_height * 0.18
+		for tier_idx in range(4):
+			var tier_y := canopy_start + tier_idx * tier_spacing
+			var tier_scale := tree_scale * (1.0 - tier_idx * 0.08)  # slightly smaller each tier
+			tier_mms[tier_idx].set_instance_transform(placed, Transform3D(
+				Basis.from_scale(Vector3(tier_scale, 1.0, tier_scale)),
+				Vector3(x, tier_y, z)
+			))
 
 		# Batched collision — single body, many shapes
 		var col := CollisionShape3D.new()
@@ -416,30 +417,24 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 	# Resize MultiMesh if we placed fewer than allocated
 	if placed < TREE_COUNT:
 		trunk_mm.instance_count = placed
-		canopy_top_mm.instance_count = placed
-		canopy_low_mm.instance_count = placed
+		for mm in tier_mms:
+			mm.instance_count = placed
 
-	# Trunk — dark bark
-	var trunk_mat := _create_flat_material("#4a3828", 0.94, 0.02)
+	# Trunk — dark bark with slight roughness
 	var trunk_mmi := MultiMeshInstance3D.new()
 	trunk_mmi.multimesh = trunk_mm
-	trunk_mmi.material_override = trunk_mat
+	trunk_mmi.material_override = _create_flat_material("#3a2a1a", 0.95, 0.02)
 	trunk_mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(trunk_mmi)
 
-	# Upper canopy — darker green
-	var canopy_top_mmi := MultiMeshInstance3D.new()
-	canopy_top_mmi.multimesh = canopy_top_mm
-	canopy_top_mmi.material_override = _create_flat_material("#2a5a28")
-	canopy_top_mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	add_child(canopy_top_mmi)
-
-	# Lower canopy — slightly lighter green
-	var canopy_low_mmi := MultiMeshInstance3D.new()
-	canopy_low_mmi.multimesh = canopy_low_mm
-	canopy_low_mmi.material_override = _create_flat_material("#3a6a38")
-	canopy_low_mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	add_child(canopy_low_mmi)
+	# Canopy tiers — gradient from dark (top) to lighter (bottom)
+	var tier_colors := ["#1a3a18", "#224422", "#2a5228", "#326032"]
+	for tier_idx in range(4):
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = tier_mms[tier_idx]
+		mmi.material_override = _create_flat_material(tier_colors[tier_idx])
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		add_child(mmi)
 
 	# Scatter rocks across the map — 40
 	for index in range(40):
