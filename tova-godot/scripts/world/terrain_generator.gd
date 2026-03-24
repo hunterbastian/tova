@@ -11,6 +11,8 @@ const PALETTE_SLOPE    := Color("#5a8a42")  # grassy slopes
 const PALETTE_DRY      := Color("#8a9a68")  # dry alpine grass
 const PALETTE_ROCK     := Color("#8a8a82")  # grey limestone
 const PALETTE_SNOW     := Color("#f0f0f8")  # bright clean snow
+const PALETTE_WATER    := Color("#3a6a8a")  # alpine lake/river
+const PALETTE_SHORE    := Color("#6a8a6a")  # muddy shoreline
 
 # ---------------------------------------------------------------------------
 # Member variables
@@ -159,7 +161,40 @@ func sample_height(x: float, z: float) -> float:
 	var castle_dist_lift := Vector2(x - _castle_center.x, z - _castle_center.z).length()
 	var castle_lift := maxf(0.0, 1.0 - castle_dist_lift / 108.0) * 4.0
 
-	var height := 8.0 + broad + hills + ridge + peak_lift + ridge_height + rock_formations - canyon_depth + forest_lift + castle_lift
+	# Cliffs — steep faces on mountain sides using domain-warped noise
+	var cliff_warp := _noise_hills.get_noise_3d(x * 0.8, 2.0, z * 0.8) * 30.0
+	var cliff_noise := _noise_ridge.get_noise_3d(x * 0.5 + cliff_warp, 3.0, z * 0.5)
+	var cliff_height := 0.0
+	if mountain_proximity > 0.15 and absf(cliff_noise) < 0.08:
+		# Sharp step — creates a cliff face where noise crosses zero
+		cliff_height = 15.0 * mountain_proximity
+
+	# Rivers — carved channels that flow downhill through valleys
+	# Uses absolute-value noise for sharp V-shaped river beds
+	var river_noise := absf(_noise_broad.get_noise_3d(
+		(x + _offset_z * 0.5) * 0.4, 0.9, (z - _offset_x * 0.5) * 0.4
+	))
+	var river_depth := 0.0
+	if river_noise < 0.06:
+		# Sharp river channel — narrow and deep
+		river_depth = (0.06 - river_noise) / 0.06 * 8.0
+		# Widen slightly with secondary noise
+		var bank_noise := absf(_noise_hills.get_noise_3d(x * 0.3, 1.5, z * 0.3))
+		if bank_noise < 0.12:
+			river_depth += (0.12 - bank_noise) / 0.12 * 3.0
+
+	# Lakes — flat water basins in low areas between mountains
+	# Find natural depressions and flatten them to a water level
+	var lake_noise := _noise_broad.get_noise_3d(
+		(x + _offset_x * 2.0) * 0.15, 0.5, (z + _offset_z * 2.0) * 0.15
+	)
+	var lake_depth := 0.0
+	if lake_noise < -0.3 and mountain_proximity < 0.5:
+		# Basin — flatten to a consistent water level
+		var lake_strength := (-0.3 - lake_noise) / 0.3
+		lake_depth = _smootherstep(lake_strength) * 12.0
+
+	var height := 8.0 + broad + hills + ridge + peak_lift + ridge_height + rock_formations - canyon_depth + cliff_height + forest_lift + castle_lift - river_depth - lake_depth
 
 	# Spawn flatten
 	# Secondary noise calls use _noise_broad (freq 0.0143 ≈ 1/70).
@@ -341,6 +376,29 @@ func clear_terrain() -> void:
 # _get_vertex_color — port of buildTerrain() color logic (world.js 248-263)
 # ---------------------------------------------------------------------------
 func _get_vertex_color(x: float, z: float, y: float, seed_val: int) -> Color:
+	# Water detection — rivers and lakes
+	var river_noise := absf(_noise_broad.get_noise_3d(
+		(x + _offset_z * 0.5) * 0.4, 0.9, (z - _offset_x * 0.5) * 0.4
+	))
+	if river_noise < 0.04 and y < 50.0:
+		return PALETTE_WATER
+	elif river_noise < 0.08 and y < 50.0:
+		return PALETTE_SHORE
+
+	var lake_noise := _noise_broad.get_noise_3d(
+		(x + _offset_x * 2.0) * 0.15, 0.5, (z + _offset_z * 2.0) * 0.15
+	)
+	var mountain_prox := 0.0
+	for peak in _mountain_peaks:
+		var pd := Vector2(x - peak["pos"].x, z - peak["pos"].z).length()
+		mountain_prox = maxf(mountain_prox, maxf(0.0, 1.0 - pd / (peak["radius"] * 1.5)))
+	if lake_noise < -0.3 and mountain_prox < 0.5:
+		var lake_strength := (-0.3 - lake_noise) / 0.3
+		if lake_strength > 0.3:
+			return PALETTE_WATER
+		elif lake_strength > 0.1:
+			return PALETTE_SHORE
+
 	var forest_dist := Vector2(x - _forest_center.x, z - _forest_center.z).length()
 	var spawn_dist  := Vector2(x, z).length()
 	var moisture    := _noise_moisture.get_noise_3d(

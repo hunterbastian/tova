@@ -85,8 +85,16 @@ func _draw() -> void:
 			var wz := -half_world + (float(iz) + 0.5) / float(FOG_GRID) * float(GameState.WORLD_SIZE)
 			var h: float = _terrain.sample_height(wx, wz)
 
+			# Check for water
+			var river_n := absf(_terrain._noise_broad.get_noise_3d(
+				(wx + _terrain._offset_z * 0.5) * 0.4, 0.9, (wz - _terrain._offset_x * 0.5) * 0.4
+			))
+			var is_water := river_n < 0.06 and h < 50.0
+
 			var color: Color
-			if h > 100.0:
+			if is_water:
+				color = Color("#3a6a8a")
+			elif h > 100.0:
 				color = Color("#e8e8f0")
 			elif h > 50.0:
 				var blend := (h - 50.0) / 50.0
