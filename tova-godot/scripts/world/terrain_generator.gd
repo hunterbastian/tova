@@ -64,18 +64,28 @@ func _build_terrain_context(seed_val: int) -> void:
 	_forest_center  = Vector3(240.0 + _rng.randf() * 96.0, 0.0, 72.0 + _rng.randf() * 96.0)
 	_castle_center  = Vector3(-84.0 - _rng.randf() * 60.0, 0.0, -264.0 - _rng.randf() * 60.0)
 
-	# Generate 5-8 mountain peaks scattered across the map
+	# Generate 8-12 distinct mountain peaks around the map
 	var half := float(GameState.WORLD_SIZE) / 2.0
-	var peak_count := 5 + _rng.randi_range(0, 3)
+	var peak_count := 8 + _rng.randi_range(0, 4)
 	_mountain_peaks = []
-	for i in range(peak_count):
-		var px := _rng.randf_range(-half * 0.8, half * 0.8)
-		var pz := _rng.randf_range(-half * 0.8, half * 0.8)
+	var attempts := 0
+	while _mountain_peaks.size() < peak_count and attempts < 50:
+		attempts += 1
+		var px := _rng.randf_range(-half * 0.85, half * 0.85)
+		var pz := _rng.randf_range(-half * 0.85, half * 0.85)
 		# Keep peaks away from spawn
-		if Vector2(px, pz).length() < 120.0:
+		if Vector2(px, pz).length() < 150.0:
 			continue
-		var peak_height := 120.0 + _rng.randf() * 180.0  # 120-300 units tall
-		var peak_radius := 200.0 + _rng.randf() * 300.0  # 200-500 unit falloff
+		# Keep peaks separated from each other (min 200 units apart)
+		var too_close := false
+		for existing in _mountain_peaks:
+			if Vector2(px - existing["pos"].x, pz - existing["pos"].z).length() < 200.0:
+				too_close = true
+				break
+		if too_close:
+			continue
+		var peak_height := 100.0 + _rng.randf() * 200.0  # 100-300 units tall
+		var peak_radius := 120.0 + _rng.randf() * 180.0  # 120-300 unit falloff (tighter = more distinct)
 		_mountain_peaks.append({
 			"pos": Vector3(px, 0.0, pz),
 			"height": peak_height,
