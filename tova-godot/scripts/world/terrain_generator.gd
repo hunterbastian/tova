@@ -6,9 +6,11 @@ extends MeshInstance3D
 const PALETTE_GRASS    := Color("#5a8a48")
 const PALETTE_SPAWN    := Color("#6a9a56")
 const PALETTE_FOREST   := Color("#3a6a2a")
-const PALETTE_HIGHLAND := Color("#5a6a4a")
+const PALETTE_HIGHLAND := Color("#6a6a5a")
 const PALETTE_SLOPE    := Color("#4a7a3a")
 const PALETTE_DRY      := Color("#4a6a32")
+const PALETTE_ROCK     := Color("#7a7a72")
+const PALETTE_SNOW     := Color("#e8e8f0")
 
 # ---------------------------------------------------------------------------
 # Member variables
@@ -23,7 +25,7 @@ var _offset_z:       float
 var _ridge_offset:   float
 var _forest_center:  Vector3
 var _castle_center:  Vector3
-var _mountain_peak:  Vector3
+var _mountain_peaks: Array[Dictionary]  # [{pos: Vector3, height: float, radius: float}]
 var _rng:            RandomNumberGenerator
 
 
@@ -61,12 +63,28 @@ func _build_terrain_context(seed_val: int) -> void:
 
 	_forest_center  = Vector3(240.0 + _rng.randf() * 96.0, 0.0, 72.0 + _rng.randf() * 96.0)
 	_castle_center  = Vector3(-84.0 - _rng.randf() * 60.0, 0.0, -264.0 - _rng.randf() * 60.0)
-	_mountain_peak  = Vector3(168.0 + _rng.randf() * 108.0, 0.0, -564.0 - _rng.randf() * 108.0)
 
-	# Sample height at each zone center
+	# Generate 5-8 mountain peaks scattered across the map
+	var half := float(GameState.WORLD_SIZE) / 2.0
+	var peak_count := 5 + _rng.randi_range(0, 3)
+	_mountain_peaks = []
+	for i in range(peak_count):
+		var px := _rng.randf_range(-half * 0.8, half * 0.8)
+		var pz := _rng.randf_range(-half * 0.8, half * 0.8)
+		# Keep peaks away from spawn
+		if Vector2(px, pz).length() < 120.0:
+			continue
+		var peak_height := 120.0 + _rng.randf() * 180.0  # 120-300 units tall
+		var peak_radius := 200.0 + _rng.randf() * 300.0  # 200-500 unit falloff
+		_mountain_peaks.append({
+			"pos": Vector3(px, 0.0, pz),
+			"height": peak_height,
+			"radius": peak_radius,
+		})
+
+	# Sample height at zone centers (peaks not included yet since they reference this)
 	_forest_center.y = sample_height(_forest_center.x, _forest_center.z)
 	_castle_center.y = sample_height(_castle_center.x, _castle_center.z)
-	_mountain_peak.y = sample_height(_mountain_peak.x, _mountain_peak.z)
 
 
 # ---------------------------------------------------------------------------
@@ -77,10 +95,12 @@ func sample_height(x: float, z: float) -> float:
 	var hills := _noise_hills.get_noise_3d(x + _offset_x, 0.32, z + _offset_z) * 8.0
 	var ridge := _noise_ridge.get_noise_3d(x - _ridge_offset, 0.52, z + _ridge_offset * 0.35) * 3.0
 
-	# Mountain peak lift — tall peaks rising from gentle terrain
-	var peak_distance := Vector2(x - _mountain_peak.x, z - _mountain_peak.z).length()
-	var peak_lift_raw := maxf(0.0, 1.0 - peak_distance / 500.0)
-	var peak_lift := _smootherstep(peak_lift_raw) * 200.0
+	# Mountain peaks — multiple peaks with varying height and radius
+	var peak_lift := 0.0
+	for peak in _mountain_peaks:
+		var peak_dist := Vector2(x - peak["pos"].x, z - peak["pos"].z).length()
+		var peak_raw := maxf(0.0, 1.0 - peak_dist / peak["radius"])
+		peak_lift += _smootherstep(peak_raw) * peak["height"]
 
 	# Forest lift
 	var forest_dist := Vector2(x - _forest_center.x, z - _forest_center.z).length()
@@ -280,13 +300,25 @@ func _get_vertex_color(x: float, z: float, y: float, seed_val: int) -> Color:
 		(z - seed_val) / 16.0
 	) * 0.5 + 0.5
 
-	if spawn_dist < GameState.SPAWN_BLEND_RADIUS + 8:
+	# Snow and rock at high elevations (mountain peaks)
+	if y > 80.0:
+		# Snow — mix in based on height, with noise for patchy snowline
+		var snow_noise := _noise_moisture.get_noise_3d(x * 0.1, 2.0, z * 0.1) * 10.0
+		if y > 100.0 + snow_noise:
+			return PALETTE_SNOW
+		else:
+			return PALETTE_SNOW.lerp(PALETTE_ROCK, clampf((100.0 + snow_noise - y) / 20.0, 0.0, 1.0))
+	elif y > 50.0:
+		# Rocky slopes below snowline
+		var rock_blend := clampf((y - 50.0) / 30.0, 0.0, 1.0)
+		return PALETTE_HIGHLAND.lerp(PALETTE_ROCK, rock_blend)
+	elif spawn_dist < GameState.SPAWN_BLEND_RADIUS + 8:
 		return PALETTE_SPAWN
 	elif forest_dist < 156.0:
 		return PALETTE_FOREST
-	elif y > 20.0:
+	elif y > 30.0:
 		return PALETTE_HIGHLAND
-	elif y > 15.0:
+	elif y > 20.0:
 		return PALETTE_SLOPE
 	elif moisture < 0.32:
 		return PALETTE_DRY
