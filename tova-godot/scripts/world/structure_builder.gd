@@ -570,32 +570,6 @@ func build_haze(seed_val: int, terrain: MeshInstance3D) -> void:
 	_rng = RandomNumberGenerator.new()
 	_rng.seed = seed_val ^ 0x53142fcd
 
-	# Mist material — transparent, no depth write
-	var mist_mat := StandardMaterial3D.new()
-	mist_mat.albedo_color = Color("#d0c0a8")
-	mist_mat.albedo_color.a = 0.18
-	mist_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mist_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	mist_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-
-	# 12 mist spheres
-	for index in range(12):
-		var sphere_mesh := SphereMesh.new()
-		sphere_mesh.radius = 10.0 + _rng.randf() * 12.0
-		sphere_mesh.height = (10.0 + _rng.randf() * 12.0) * 2.0
-		sphere_mesh.rings = 18
-		sphere_mesh.radial_segments = 14
-		var sphere := MeshInstance3D.new()
-		sphere.mesh = sphere_mesh
-		sphere.material_override = mist_mat
-		sphere.position = Vector3(
-			-40.0 + _rng.randf() * 120.0,
-			12.0 + _rng.randf() * 10.0,
-			-20.0 + _rng.randf() * 120.0
-		)
-		sphere.scale = Vector3(1.7, 0.44, 1.1)
-		add_child(sphere)
-
 	# Obelisk
 	var obelisk_mesh := BoxMesh.new()
 	obelisk_mesh.size = Vector3(2.4, 9.0, 2.4)

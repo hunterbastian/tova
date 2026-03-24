@@ -64,7 +64,7 @@ func _setup_world_environment() -> void:
 
 	# ── Volumetric fog — atmospheric depth between trees ──────────────────
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.01
+	env.volumetric_fog_density = 0.005
 	env.volumetric_fog_albedo = Color("#8a8070")
 	env.volumetric_fog_emission = Color("#3a3530")
 	env.volumetric_fog_emission_energy = 0.3
@@ -101,8 +101,8 @@ func _setup_world_environment() -> void:
 	# ── Adjustments — slight color grading ────────────────────────────────
 	env.adjustment_enabled = true
 	env.adjustment_brightness = 1.05
-	env.adjustment_contrast = 1.3
-	env.adjustment_saturation = 1.3
+	env.adjustment_contrast = 1.15
+	env.adjustment_saturation = 1.15
 
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = env
@@ -126,6 +126,7 @@ func _setup_sun() -> void:
 	_sun.directional_shadow_blend_splits = true
 	_sun.shadow_bias = 0.03
 	_sun.shadow_normal_bias = 2.0
+	_sun.shadow_blur = 2.0
 
 	add_child(_sun)
 	# Late afternoon angle — sun low in the sky for long shadows
