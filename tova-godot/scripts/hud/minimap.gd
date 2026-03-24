@@ -1,7 +1,7 @@
 extends Control
 
 const MINIMAP_SIZE := 160.0
-const MINIMAP_WORLD_RANGE := 220.0
+const MINIMAP_WORLD_RANGE := 1320.0
 
 var _player: CharacterBody3D
 

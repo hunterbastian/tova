@@ -6,6 +6,7 @@ var _structures: Node3D
 var _player: CharacterBody3D
 var _minimap: Control
 var _compass: Control
+var _world_map: Control
 
 func _ready() -> void:
 	_setup_scene_tree()
@@ -97,6 +98,15 @@ func _setup_scene_tree() -> void:
 	_minimap.offset_bottom = -12.0
 	_minimap.set_player(_player)
 	hud.add_child(_minimap)
+
+	# World map — full screen overlay, press M
+	var WorldMapScript := preload("res://scripts/hud/world_map.gd")
+	_world_map = WorldMapScript.new()
+	_world_map.name = "WorldMap"
+	_world_map.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_world_map.set_player(_player)
+	_world_map.set_terrain(_terrain)
+	hud.add_child(_world_map)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("regenerate"):
