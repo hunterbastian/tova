@@ -21,14 +21,17 @@ func _ready() -> void:
 # WorldEnvironment
 # ---------------------------------------------------------------------------
 func _setup_world_environment() -> void:
-	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color("#5a7fa0")
-	sky_material.sky_horizon_color = Color("#e8c090")
-	sky_material.ground_bottom_color = Color("#8a7060")
-	sky_material.ground_horizon_color = Color("#d8c8b8")
+	var sky_material := PhysicalSkyMaterial.new()
+	sky_material.rayleigh_color = Color("#2a3a50")
+	sky_material.mie_color = Color("#6a5040")
+	sky_material.ground_color = Color("#1a1510")
+	sky_material.turbidity = 14.0
+	sky_material.sun_disk_scale = 3.0
+	sky_material.energy_multiplier = 0.6
 
 	var sky := Sky.new()
 	sky.sky_material = sky_material
+	sky.radiance_size = Sky.RADIANCE_SIZE_256
 
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
@@ -36,11 +39,17 @@ func _setup_world_environment() -> void:
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
 	env.fog_density = 0.012
-	env.fog_light_color = Color("#d8c8b8")
-	env.tonemap_exposure = 1.35
+	env.fog_light_color = Color("#3a3228")
+	env.volumetric_fog_enabled = true
+	env.volumetric_fog_density = 0.02
+	env.volumetric_fog_albedo = Color("#4a4a50")
+	env.volumetric_fog_emission = Color("#2a2a30")
+	env.volumetric_fog_length = 200.0
+	env.volumetric_fog_sky_affect = 0.3
+	env.tonemap_exposure = 0.8
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#c8a878")
-	env.ambient_light_energy = 1.1
+	env.ambient_light_color = Color("#4a4038")
+	env.ambient_light_energy = 0.6
 
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = env
@@ -51,13 +60,13 @@ func _setup_world_environment() -> void:
 # ---------------------------------------------------------------------------
 func _setup_sun() -> void:
 	_sun = DirectionalLight3D.new()
-	_sun.light_color = Color("#f0c890")
-	_sun.light_energy = 2.0
+	_sun.light_color = Color("#a08060")
+	_sun.light_energy = 1.2
 	_sun.shadow_enabled = true
 	_sun.directional_shadow_max_distance = 280.0
 	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	add_child(_sun)
-	_sun.look_at_from_position(Vector3(88.0, 132.0, -24.0), Vector3.ZERO)
+	_sun.look_at_from_position(Vector3(88.0, 200.0, -24.0), Vector3.ZERO)
 
 # ---------------------------------------------------------------------------
 # Spawn fill light (OmniLight3D)

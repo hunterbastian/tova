@@ -4,23 +4,32 @@ extends Node3D
 # Member variables
 # ---------------------------------------------------------------------------
 var _rng: RandomNumberGenerator
+var _material_cache: Dictionary = {}
 
 
 # ---------------------------------------------------------------------------
-# Material helpers
+# Material helpers (cached to avoid duplicates)
 # ---------------------------------------------------------------------------
 func _create_flat_material(color: String, roughness: float = 0.96, metalness: float = 0.02) -> StandardMaterial3D:
+	var key := "%s_%.2f_%.2f" % [color, roughness, metalness]
+	if _material_cache.has(key):
+		return _material_cache[key]
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(color)
 	mat.roughness = roughness
 	mat.metallic = metalness
+	_material_cache[key] = mat
 	return mat
 
 
 func _create_unshaded_material(color: String) -> StandardMaterial3D:
+	var key := "unshaded_" + color
+	if _material_cache.has(key):
+		return _material_cache[key]
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(color)
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_material_cache[key] = mat
 	return mat
 
 
@@ -296,7 +305,13 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 	_rng = RandomNumberGenerator.new()
 	_rng.seed = seed_val ^ 0x1f123bb5
 
-	const TREE_COUNT := 220
+	const TREE_COUNT := 1800
+
+	# Clearing noise — drives where fields/clearings appear
+	var clearing_noise := FastNoiseLite.new()
+	clearing_noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	clearing_noise.frequency = 0.02
+	clearing_noise.seed = seed_val
 
 	# Trunk MultiMesh
 	var trunk_mesh := CylinderMesh.new()
@@ -322,20 +337,37 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 	canopy_mm.transform_format = MultiMesh.TRANSFORM_3D
 	canopy_mm.instance_count = TREE_COUNT
 
-	var fc := GameState.forest_center
 	var cc := GameState.castle_center
+	var half := float(GameState.WORLD_SIZE) / 2.0
+
+	# Single StaticBody3D for all tree colliders (optimization)
+	var tree_collider_body := StaticBody3D.new()
+	var shared_cylinder := CylinderShape3D.new()
+	shared_cylinder.radius = 0.38
+	shared_cylinder.height = 10.0
 
 	var placed := 0
 	var attempts := 0
-	while placed < TREE_COUNT and attempts < 2000:
+	while placed < TREE_COUNT and attempts < 12000:
 		attempts += 1
-		var angle := _rng.randf() * TAU
-		var distance := 4.0 + sqrt(_rng.randf()) * 18.0
-		var x := fc.x + cos(angle) * distance
-		var z := fc.z + sin(angle) * distance
+		var x := _rng.randf_range(-half + 5.0, half - 5.0)
+		var z := _rng.randf_range(-half + 5.0, half - 5.0)
+
+		# Skip spawn area
 		var spawn_distance := Vector2(x, z).length()
+		if spawn_distance < GameState.SPAWN_BLEND_RADIUS + 4.0:
+			continue
+		# Skip castle interior
 		var castle_distance := Vector2(x - cc.x, z - cc.z).length()
-		if spawn_distance < GameState.SPAWN_BLEND_RADIUS + 4.0 or castle_distance < 16.0:
+		if castle_distance < 16.0:
+			continue
+
+		# Clearing check — noise > 0.25 means open field
+		var clearing_val := clearing_noise.get_noise_2d(x, z)
+		if clearing_val > 0.25:
+			continue
+		# Density falloff at clearing edges
+		if clearing_val > 0.1 and _rng.randf() > 0.5:
 			continue
 
 		var y: float = terrain.sample_height(x, z)
@@ -343,18 +375,29 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 		var canopy_height := 3.1 + _rng.randf() * 1.4
 		var canopy_scale := 0.8 + _rng.randf() * 0.55
 
-		# Trunk transform
-		var trunk_basis := Basis.from_scale(Vector3(1.0, trunk_height / 2.8, 1.0))
-		trunk_mm.set_instance_transform(placed, Transform3D(trunk_basis, Vector3(x, y + trunk_height * 0.5, z)))
+		trunk_mm.set_instance_transform(placed, Transform3D(
+			Basis.from_scale(Vector3(1.0, trunk_height / 2.8, 1.0)),
+			Vector3(x, y + trunk_height * 0.5, z)
+		))
+		canopy_mm.set_instance_transform(placed, Transform3D(
+			Basis.from_scale(Vector3(canopy_scale, canopy_height / 3.8, canopy_scale)),
+			Vector3(x, y + trunk_height + canopy_height * 0.42, z)
+		))
 
-		# Canopy transform
-		var canopy_basis := Basis.from_scale(Vector3(canopy_scale, canopy_height / 3.8, canopy_scale))
-		canopy_mm.set_instance_transform(placed, Transform3D(canopy_basis, Vector3(x, y + trunk_height + canopy_height * 0.42, z)))
-
-		# Collision
-		_add_cylinder_collider(Vector3(x, y, z), 0.38)
+		# Batched collision — single body, many shapes
+		var col := CollisionShape3D.new()
+		col.shape = shared_cylinder
+		col.position = Vector3(x, y, z)
+		tree_collider_body.add_child(col)
 
 		placed += 1
+
+	add_child(tree_collider_body)
+
+	# Resize MultiMesh if we placed fewer than allocated
+	if placed < TREE_COUNT:
+		trunk_mm.instance_count = placed
+		canopy_mm.instance_count = placed
 
 	var trunk_mmi := MultiMeshInstance3D.new()
 	trunk_mmi.multimesh = trunk_mm
@@ -583,4 +626,6 @@ func build_haze(seed_val: int, terrain: MeshInstance3D) -> void:
 # ---------------------------------------------------------------------------
 func clear_structures() -> void:
 	for child in get_children():
+		remove_child(child)
 		child.queue_free()
+	_material_cache.clear()

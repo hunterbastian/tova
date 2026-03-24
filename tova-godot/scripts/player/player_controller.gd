@@ -5,7 +5,7 @@ extends CharacterBody3D
 # ---------------------------------------------------------------------------
 const LOOK_SENSITIVITY := 0.0022
 const MAX_PITCH := PI / 2.0 - 0.04
-const HEAD_BASE_Y := 1.6
+const HEAD_BASE_Y := 0.75
 
 # ---------------------------------------------------------------------------
 # Node references

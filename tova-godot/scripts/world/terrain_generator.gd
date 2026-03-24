@@ -3,12 +3,12 @@ extends MeshInstance3D
 # ---------------------------------------------------------------------------
 # Terrain palette (from world.js lines 11-18)
 # ---------------------------------------------------------------------------
-const PALETTE_GRASS    := Color("#c4a56e")
-const PALETTE_SPAWN    := Color("#d4b87a")
-const PALETTE_FOREST   := Color("#8a7256")
-const PALETTE_HIGHLAND := Color("#9c8872")
-const PALETTE_SLOPE    := Color("#b09878")
-const PALETTE_DRY      := Color("#c8a878")
+const PALETTE_GRASS    := Color("#4a6a3a")
+const PALETTE_SPAWN    := Color("#5a7a48")
+const PALETTE_FOREST   := Color("#2a4a22")
+const PALETTE_HIGHLAND := Color("#5a5a4a")
+const PALETTE_SLOPE    := Color("#4a5a3a")
+const PALETTE_DRY      := Color("#3a5a2a")
 
 # ---------------------------------------------------------------------------
 # Member variables
@@ -73,14 +73,14 @@ func _build_terrain_context(seed_val: int) -> void:
 # sample_height — core height function (world.js 148-199)
 # ---------------------------------------------------------------------------
 func sample_height(x: float, z: float) -> float:
-	var broad := _noise_broad.get_noise_3d(x + _offset_x, 0.15, z + _offset_z) * 10.0
-	var hills := _noise_hills.get_noise_3d(x + _offset_x, 0.32, z + _offset_z) * 5.0
-	var ridge := _noise_ridge.get_noise_3d(x - _ridge_offset, 0.52, z + _ridge_offset * 0.35) * 2.1
+	var broad := _noise_broad.get_noise_3d(x + _offset_x, 0.15, z + _offset_z) * 28.0
+	var hills := _noise_hills.get_noise_3d(x + _offset_x, 0.32, z + _offset_z) * 16.0
+	var ridge := _noise_ridge.get_noise_3d(x - _ridge_offset, 0.52, z + _ridge_offset * 0.35) * 8.0
 
 	# Mountain peak lift
 	var peak_distance := Vector2(x - _mountain_peak.x, z - _mountain_peak.z).length()
-	var peak_lift_raw := maxf(0.0, 1.0 - peak_distance / 70.0)
-	var peak_lift := _smootherstep(peak_lift_raw) * 16.0
+	var peak_lift_raw := maxf(0.0, 1.0 - peak_distance / 90.0)
+	var peak_lift := _smootherstep(peak_lift_raw) * 50.0
 
 	# Forest lift
 	var forest_dist := Vector2(x - _forest_center.x, z - _forest_center.z).length()

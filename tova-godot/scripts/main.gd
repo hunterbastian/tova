@@ -41,15 +41,15 @@ func _setup_scene_tree() -> void:
 	# Player collision shape
 	var col_shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.35
-	capsule.height = 1.8
+	capsule.radius = 0.18
+	capsule.height = 0.9
 	col_shape.shape = capsule
 	_player.add_child(col_shape)
 
 	# Player head + camera
 	var head := Node3D.new()
 	head.name = "Head"
-	head.position.y = 1.6
+	head.position.y = 0.75
 	_player.add_child(head)
 
 	var camera := Camera3D.new()
