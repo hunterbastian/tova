@@ -332,8 +332,8 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 	# Tier 3: narrow
 	# Tier 4 (top): pointed cap
 	var tier_meshes: Array[CylinderMesh] = []
-	var tier_radii := [2.2, 1.7, 1.2, 0.6]
-	var tier_heights := [2.0, 1.8, 1.5, 1.2]
+	var tier_radii := [2.4, 1.9, 1.4, 0.7]
+	var tier_heights := [2.2, 2.0, 1.6, 1.3]
 	var tier_mms: Array[MultiMesh] = []
 
 	for i in range(4):
@@ -384,8 +384,8 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 			continue
 
 		var y: float = terrain.sample_height(x, z)
-		var trunk_height := 4.0 + _rng.randf() * 4.0  # taller trunks (4-8 units)
-		var tree_scale := 0.7 + _rng.randf() * 0.6  # overall size variation
+		var trunk_height := 3.5 + _rng.randf() * 6.0  # 3.5-9.5 units — big variation
+		var tree_scale := 0.6 + _rng.randf() * 0.8  # 0.6-1.4 — wide size range
 
 		# Trunk — tall and tapered
 		trunk_mm.set_instance_transform(placed, Transform3D(
@@ -393,15 +393,21 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 			Vector3(x, y + trunk_height * 0.5, z)
 		))
 
-		# 4 canopy tiers stacked up the trunk
-		var canopy_start := y + trunk_height * 0.45  # branches start partway up
-		var tier_spacing := trunk_height * 0.18
+		# 4 canopy tiers stacked up the trunk — each rotated and slightly irregular
+		var canopy_start := y + trunk_height * 0.4
+		var tier_spacing := trunk_height * 0.17
+		var tier_overlap := 0.3 + _rng.randf() * 0.2  # how much tiers overlap
 		for tier_idx in range(4):
-			var tier_y := canopy_start + tier_idx * tier_spacing
-			var tier_scale := tree_scale * (1.0 - tier_idx * 0.08)  # slightly smaller each tier
+			var tier_y := canopy_start + tier_idx * (tier_spacing + tier_overlap)
+			var tier_scale := tree_scale * (1.0 - tier_idx * 0.06)
+			# Irregular spread — stretch X or Z slightly per tier
+			var stretch_x := tier_scale * (0.9 + _rng.randf() * 0.3)
+			var stretch_z := tier_scale * (0.9 + _rng.randf() * 0.3)
+			# Rotate each tier so branches don't stack
+			var tier_rot := _rng.randf() * TAU
+			var basis := Basis(Vector3.UP, tier_rot) * Basis.from_scale(Vector3(stretch_x, 1.0, stretch_z))
 			tier_mms[tier_idx].set_instance_transform(placed, Transform3D(
-				Basis.from_scale(Vector3(tier_scale, 1.0, tier_scale)),
-				Vector3(x, tier_y, z)
+				basis, Vector3(x, tier_y, z)
 			))
 
 		# Batched collision — single body, many shapes
