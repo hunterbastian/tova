@@ -11,7 +11,7 @@ func _ready() -> void:
 	_setup_sun()
 	_setup_fill_light()
 	_setup_spawn_fill_light()
-	_setup_moon()
+	# _setup_moon()  # removed — decorative only, no light
 
 # ---------------------------------------------------------------------------
 # Environment — sky, GI, fog, post-processing
