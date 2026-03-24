@@ -580,19 +580,25 @@ func build_haze(seed_val: int, terrain: MeshInstance3D) -> void:
 
 	_add_box_collider(Vector3(22.0, terrain.sample_height(22.0, 12.0), 12.0), 1.3, 1.3)
 
-	# Ruins — 3 groups, each with 2 pillars + lintel
-	var ruin_mat := _create_flat_material("#756857")
-	for index in range(3):
-		var origin_x := -18.0 + _rng.randf() * 52.0
-		var origin_z := 28.0 + _rng.randf() * 46.0
+	# Scattered ruins — archways across the whole map (Elder Scrolls feel)
+	var ruin_mat := _create_flat_material("#5a5248")
+	var pillar_mesh := BoxMesh.new()
+	pillar_mesh.size = Vector3(0.42, 3.4, 0.48)
+	var lintel_mesh := BoxMesh.new()
+	lintel_mesh.size = Vector3(2.8, 0.42, 0.52)
+	var half := float(GameState.WORLD_SIZE) / 2.0
+
+	for index in range(12):
+		var origin_x := _rng.randf_range(-half + 10.0, half - 10.0)
+		var origin_z := _rng.randf_range(-half + 10.0, half - 10.0)
+		if Vector2(origin_x, origin_z).length() < GameState.SPAWN_BLEND_RADIUS + 6.0:
+			continue
 		var origin_y: float = terrain.sample_height(origin_x, origin_z)
 
 		var ruin := Node3D.new()
 		ruin.position = Vector3(origin_x, origin_y, origin_z)
+		ruin.rotation.y = _rng.randf() * TAU
 
-		# Left pillar
-		var pillar_mesh := BoxMesh.new()
-		pillar_mesh.size = Vector3(0.42, 3.4, 0.48)
 		var left_pillar := MeshInstance3D.new()
 		left_pillar.mesh = pillar_mesh
 		left_pillar.material_override = ruin_mat
@@ -600,7 +606,6 @@ func build_haze(seed_val: int, terrain: MeshInstance3D) -> void:
 		left_pillar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		ruin.add_child(left_pillar)
 
-		# Right pillar
 		var right_pillar := MeshInstance3D.new()
 		right_pillar.mesh = pillar_mesh
 		right_pillar.material_override = ruin_mat
@@ -608,17 +613,89 @@ func build_haze(seed_val: int, terrain: MeshInstance3D) -> void:
 		right_pillar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		ruin.add_child(right_pillar)
 
-		# Lintel
-		var lintel_mesh := BoxMesh.new()
-		lintel_mesh.size = Vector3(2.8, 0.42, 0.52)
-		var lintel := MeshInstance3D.new()
-		lintel.mesh = lintel_mesh
-		lintel.material_override = ruin_mat
-		lintel.position = Vector3(0.0, 3.3, 0.0)
-		lintel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-		ruin.add_child(lintel)
+		# Only some ruins still have lintels (others crumbled)
+		if _rng.randf() > 0.35:
+			var lintel := MeshInstance3D.new()
+			lintel.mesh = lintel_mesh
+			lintel.material_override = ruin_mat
+			lintel.position = Vector3(0.0, 3.3, 0.0)
+			lintel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			ruin.add_child(lintel)
 
 		add_child(ruin)
+
+	# Standing stones — circles of tall thin stones (like Skyrim)
+	var stone_mat := _create_flat_material("#4a4640")
+	for circle_idx in range(3):
+		var cx := _rng.randf_range(-half + 20.0, half - 20.0)
+		var cz := _rng.randf_range(-half + 20.0, half - 20.0)
+		if Vector2(cx, cz).length() < GameState.SPAWN_BLEND_RADIUS + 8.0:
+			continue
+		var cy: float = terrain.sample_height(cx, cz)
+		var stone_count := 5 + _rng.randi_range(0, 3)
+		var circle_radius := 3.0 + _rng.randf() * 2.0
+
+		for stone_idx in range(stone_count):
+			var angle := (float(stone_idx) / float(stone_count)) * TAU + _rng.randf() * 0.3
+			var sx := cx + cos(angle) * circle_radius
+			var sz := cz + sin(angle) * circle_radius
+			var sy: float = terrain.sample_height(sx, sz)
+			var stone_height := 2.5 + _rng.randf() * 2.0
+			var stone_width := 0.3 + _rng.randf() * 0.2
+
+			var stone_mesh := BoxMesh.new()
+			stone_mesh.size = Vector3(stone_width, stone_height, stone_width * 0.8)
+			var stone := MeshInstance3D.new()
+			stone.mesh = stone_mesh
+			stone.material_override = stone_mat
+			stone.position = Vector3(sx, sy + stone_height * 0.5, sz)
+			# Slight tilt — weathered, ancient
+			stone.rotation = Vector3(
+				(_rng.randf() - 0.5) * 0.15,
+				angle + PI,
+				(_rng.randf() - 0.5) * 0.1
+			)
+			stone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			add_child(stone)
+
+	# Watchtowers — tall cylindrical ruins with broken tops
+	var tower_mat := _create_flat_material("#5a5550", 0.94, 0.03)
+	for tower_idx in range(2):
+		var tx := _rng.randf_range(-half + 15.0, half - 15.0)
+		var tz := _rng.randf_range(-half + 15.0, half - 15.0)
+		if Vector2(tx, tz).length() < GameState.SPAWN_BLEND_RADIUS + 10.0:
+			continue
+		var castle_dist := Vector2(tx - GameState.castle_center.x, tz - GameState.castle_center.z).length()
+		if castle_dist < 20.0:
+			continue
+		var ty: float = terrain.sample_height(tx, tz)
+		var tower_height := 8.0 + _rng.randf() * 4.0
+
+		var tower_mesh := CylinderMesh.new()
+		tower_mesh.top_radius = 1.4
+		tower_mesh.bottom_radius = 1.8
+		tower_mesh.height = tower_height
+		tower_mesh.radial_segments = 8
+		var tower := MeshInstance3D.new()
+		tower.mesh = tower_mesh
+		tower.material_override = tower_mat
+		tower.position = Vector3(tx, ty + tower_height * 0.5, tz)
+		tower.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		add_child(tower)
+		_add_cylinder_collider(Vector3(tx, ty, tz), 1.8)
+
+		# Broken parapet ring on top
+		var parapet_mesh := CylinderMesh.new()
+		parapet_mesh.top_radius = 1.9
+		parapet_mesh.bottom_radius = 1.9
+		parapet_mesh.height = 0.6
+		parapet_mesh.radial_segments = 8
+		var parapet := MeshInstance3D.new()
+		parapet.mesh = parapet_mesh
+		parapet.material_override = tower_mat
+		parapet.position = Vector3(tx, ty + tower_height + 0.1, tz)
+		parapet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		add_child(parapet)
 
 
 # ---------------------------------------------------------------------------

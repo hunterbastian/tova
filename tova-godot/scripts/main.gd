@@ -10,10 +10,15 @@ func _ready() -> void:
 	regenerate_world()
 
 func _setup_scene_tree() -> void:
+	# Preload scripts
+	var env_script := load("res://scripts/environment/environment_setup.gd")
+	var terrain_script := load("res://scripts/world/terrain_generator.gd")
+	var structure_script := load("res://scripts/world/structure_builder.gd")
+
 	# Environment
 	_environment = Node3D.new()
 	_environment.name = "Environment"
-	_environment.set_script(load("res://scripts/environment/environment_setup.gd"))
+	_environment.set_script(env_script)
 	add_child(_environment)
 
 	# World container
@@ -24,14 +29,14 @@ func _setup_scene_tree() -> void:
 	# Terrain (MeshInstance3D)
 	_terrain = MeshInstance3D.new()
 	_terrain.name = "TerrainMesh"
-	_terrain.set_script(load("res://scripts/world/terrain_generator.gd"))
 	world.add_child(_terrain)
+	_terrain.set_script(terrain_script)
 
 	# Structures container
 	_structures = Node3D.new()
 	_structures.name = "Structures"
-	_structures.set_script(load("res://scripts/world/structure_builder.gd"))
 	world.add_child(_structures)
+	_structures.set_script(structure_script)
 
 	# Player (CharacterBody3D)
 	_player = CharacterBody3D.new()
