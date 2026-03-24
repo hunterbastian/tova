@@ -4,6 +4,8 @@ var _environment: Node3D
 var _terrain: MeshInstance3D
 var _structures: Node3D
 var _player: CharacterBody3D
+var _minimap: Control
+var _compass: Control
 
 func _ready() -> void:
 	_setup_scene_tree()
@@ -64,6 +66,38 @@ func _setup_scene_tree() -> void:
 
 	add_child(_player)
 
+	# HUD layer
+	var hud := CanvasLayer.new()
+	hud.name = "HUD"
+	add_child(hud)
+
+	# Compass — top center
+	var CompassScript := preload("res://scripts/hud/compass.gd")
+	_compass = CompassScript.new()
+	_compass.name = "Compass"
+	_compass.anchor_left = 0.5
+	_compass.anchor_right = 0.5
+	_compass.anchor_top = 0.0
+	_compass.offset_left = -150.0
+	_compass.offset_top = 12.0
+	_compass.set_player(_player)
+	hud.add_child(_compass)
+
+	# Minimap — bottom right
+	var MinimapScript := preload("res://scripts/hud/minimap.gd")
+	_minimap = MinimapScript.new()
+	_minimap.name = "Minimap"
+	_minimap.anchor_left = 1.0
+	_minimap.anchor_right = 1.0
+	_minimap.anchor_top = 1.0
+	_minimap.anchor_bottom = 1.0
+	_minimap.offset_left = -172.0
+	_minimap.offset_top = -172.0
+	_minimap.offset_right = -12.0
+	_minimap.offset_bottom = -12.0
+	_minimap.set_player(_player)
+	hud.add_child(_minimap)
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("regenerate"):
 		regenerate_world()
@@ -78,9 +112,11 @@ func regenerate_world() -> void:
 	_terrain.clear_terrain()
 	_structures.clear_structures()
 
-	# Generate new world — nature only
+	# Generate new world
 	_terrain.generate_terrain(seed_val)
+	_structures.build_spawn_sanctum(seed_val, _terrain)
 	_structures.build_forest(seed_val, _terrain)
+	_structures.build_castle(seed_val, _terrain)
 	_structures.build_haze(seed_val, _terrain)
 
 	# Position environment lights

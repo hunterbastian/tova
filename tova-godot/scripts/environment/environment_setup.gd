@@ -16,7 +16,7 @@ func _ready() -> void:
 	_setup_sun()
 	_setup_spawn_fill_light()
 	_setup_moon()
-	_setup_cloud_volumes()
+	#_setup_cloud_volumes()  # disabled for now
 
 # ---------------------------------------------------------------------------
 # WorldEnvironment
@@ -40,7 +40,7 @@ func _setup_world_environment() -> void:
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
 	env.fog_density = 0.012
 	env.fog_light_color = Color("#3a3228")
-	env.volumetric_fog_enabled = true
+	env.volumetric_fog_enabled = false
 	env.volumetric_fog_density = 0.005
 	env.volumetric_fog_albedo = Color("#2a2a28")
 	env.volumetric_fog_emission = Color("#1a1a18")
