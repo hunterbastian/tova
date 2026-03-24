@@ -19,14 +19,15 @@ func _ready() -> void:
 func _setup_world_environment() -> void:
 	# Sky — warm late-afternoon palette
 	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color("#4a7aaa")
-	sky_material.sky_horizon_color = Color("#c0a070")
-	sky_material.ground_bottom_color = Color("#3a3530")
-	sky_material.ground_horizon_color = Color("#7a6a58")
-	sky_material.sky_curve = 0.08
-	sky_material.ground_curve = 0.08
-	sky_material.sky_energy_multiplier = 1.0
-	sky_material.ground_energy_multiplier = 0.5
+	# Soft golden hour — painterly Swiss sky
+	sky_material.sky_top_color = Color("#5a88b8")
+	sky_material.sky_horizon_color = Color("#e8b878")
+	sky_material.ground_bottom_color = Color("#4a5040")
+	sky_material.ground_horizon_color = Color("#9a8868")
+	sky_material.sky_curve = 0.06
+	sky_material.ground_curve = 0.06
+	sky_material.sky_energy_multiplier = 1.2
+	sky_material.ground_energy_multiplier = 0.6
 
 	var sky := Sky.new()
 	sky.sky_material = sky_material
@@ -56,26 +57,26 @@ func _setup_world_environment() -> void:
 	# ── Fog — warm atmospheric depth ──────────────────────────────────────
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
-	env.fog_density = 0.003
-	env.fog_light_color = Color("#9a8a70")
-	env.fog_light_energy = 0.6
-	env.fog_sun_scatter = 0.3
-	env.fog_sky_affect = 0.4
+	env.fog_density = 0.002
+	env.fog_light_color = Color("#c8b090")
+	env.fog_light_energy = 0.8
+	env.fog_sun_scatter = 0.5
+	env.fog_sky_affect = 0.5
 
-	# ── Volumetric fog — atmospheric depth between trees ──────────────────
+	# ── Volumetric fog — soft atmospheric haze in valleys ─────────────────
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.005
-	env.volumetric_fog_albedo = Color("#8a8070")
-	env.volumetric_fog_emission = Color("#3a3530")
-	env.volumetric_fog_emission_energy = 0.3
-	env.volumetric_fog_length = 400.0
-	env.volumetric_fog_sky_affect = 0.0
+	env.volumetric_fog_density = 0.003
+	env.volumetric_fog_albedo = Color("#b0a890")
+	env.volumetric_fog_emission = Color("#5a5040")
+	env.volumetric_fog_emission_energy = 0.15
+	env.volumetric_fog_length = 500.0
+	env.volumetric_fog_sky_affect = 0.15
 
 	# ── Tonemap ───────────────────────────────────────────────────────────
 	# AgX not available in this Godot version — use ACES Fitted instead
 	env.tonemap_mode = 3  # TONE_MAP_ACES
-	env.tonemap_exposure = 1.1
-	env.tonemap_white = 6.0
+	env.tonemap_exposure = 1.15
+	env.tonemap_white = 8.0
 
 	# ── SSAO — contact shadows in crevices ────────────────────────────────
 	env.ssao_enabled = true
@@ -92,17 +93,17 @@ func _setup_world_environment() -> void:
 
 	# ── Glow — soft bloom ─────────────────────────────────────────────────
 	env.glow_enabled = true
-	env.glow_intensity = 0.3
-	env.glow_strength = 0.6
-	env.glow_bloom = 0.05
+	env.glow_intensity = 0.4
+	env.glow_strength = 0.8
+	env.glow_bloom = 0.08
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
-	env.glow_hdr_threshold = 1.2
+	env.glow_hdr_threshold = 0.9
 
-	# ── Adjustments — slight color grading ────────────────────────────────
+	# ── Color grading — warm, slightly dreamy ─────────────────────────────
 	env.adjustment_enabled = true
-	env.adjustment_brightness = 1.05
-	env.adjustment_contrast = 1.15
-	env.adjustment_saturation = 1.15
+	env.adjustment_brightness = 1.02
+	env.adjustment_contrast = 1.1
+	env.adjustment_saturation = 1.08
 
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = env
@@ -113,9 +114,9 @@ func _setup_world_environment() -> void:
 # ---------------------------------------------------------------------------
 func _setup_sun() -> void:
 	_sun = DirectionalLight3D.new()
-	_sun.light_color = Color("#f0c888")
-	_sun.light_energy = 2.0
-	_sun.light_indirect_energy = 1.5
+	_sun.light_color = Color("#f8d098")
+	_sun.light_energy = 1.8
+	_sun.light_indirect_energy = 1.2
 	# Shadow — 4 cascades for quality at all distances
 	_sun.shadow_enabled = true
 	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
@@ -130,15 +131,15 @@ func _setup_sun() -> void:
 
 	add_child(_sun)
 	# Late afternoon angle — sun low in the sky for long shadows
-	_sun.look_at_from_position(Vector3(100.0, 160.0, -40.0), Vector3.ZERO)
+	_sun.look_at_from_position(Vector3(120.0, 100.0, -50.0), Vector3.ZERO)
 
 # ---------------------------------------------------------------------------
 # Fill light — secondary directional from opposite side (sky bounce)
 # ---------------------------------------------------------------------------
 func _setup_fill_light() -> void:
 	_fill_light = DirectionalLight3D.new()
-	_fill_light.light_color = Color("#7090b0")
-	_fill_light.light_energy = 0.4
+	_fill_light.light_color = Color("#8aa0c0")
+	_fill_light.light_energy = 0.35
 	_fill_light.light_indirect_energy = 0.5
 	_fill_light.shadow_enabled = false
 	add_child(_fill_light)
