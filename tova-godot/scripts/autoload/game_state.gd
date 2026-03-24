@@ -4,7 +4,7 @@ extends Node
 # Constants (ported from the Three.js version)
 # ---------------------------------------------------------------------------
 const WORLD_SIZE := 220
-const WORLD_SEGMENTS := 110
+const WORLD_SEGMENTS := 400
 const SPAWN_RADIUS := 14
 const SPAWN_BLEND_RADIUS := 30
 const PLAYER_HEIGHT := 1.8

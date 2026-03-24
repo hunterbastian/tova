@@ -167,37 +167,79 @@ func generate_terrain(seed_val: int) -> void:
 			heights[idx] = y
 			colors[idx]  = _get_vertex_color(x, z, y, seed_val)
 
-	# Build triangles (two per quad, unindexed for flat shading)
+	# Build triangles — indexed for smooth normals
+	# First pass: add all vertices with normals computed from height gradient
+	for iz in range(seg + 1):
+		for ix in range(seg + 1):
+			var idx := iz * (seg + 1) + ix
+			var x := -half + ix * step
+			var z := -half + iz * step
+			var y := heights[idx]
+
+			# Compute normal from height gradient (central differences)
+			var dx_val: float
+			var dz_val: float
+			if ix > 0 and ix < seg:
+				dx_val = (heights[iz * (seg + 1) + ix + 1] - heights[iz * (seg + 1) + ix - 1]) / (2.0 * step)
+			elif ix == 0:
+				dx_val = (heights[iz * (seg + 1) + 1] - y) / step
+			else:
+				dx_val = (y - heights[iz * (seg + 1) + ix - 1]) / step
+
+			if iz > 0 and iz < seg:
+				dz_val = (heights[(iz + 1) * (seg + 1) + ix] - heights[(iz - 1) * (seg + 1) + ix]) / (2.0 * step)
+			elif iz == 0:
+				dz_val = (heights[(seg + 1) + ix] - y) / step
+			else:
+				dz_val = (y - heights[(iz - 1) * (seg + 1) + ix]) / step
+
+			var normal := Vector3(-dx_val, 1.0, -dz_val).normalized()
+
+			st.set_color(colors[idx])
+			st.set_normal(normal)
+			st.set_uv(Vector2(float(ix) / float(seg), float(iz) / float(seg)))
+			st.add_vertex(Vector3(x, y, z))
+
+	# Second pass: add triangle indices
 	for iz in range(seg):
 		for ix in range(seg):
 			var i00 := iz * (seg + 1) + ix
 			var i10 := i00 + 1
 			var i01 := i00 + (seg + 1)
 			var i11 := i01 + 1
+			st.add_index(i00)
+			st.add_index(i10)
+			st.add_index(i01)
+			st.add_index(i10)
+			st.add_index(i11)
+			st.add_index(i01)
 
-			var x00 := -half + ix * step
-			var z00 := -half + iz * step
-
-			# Triangle 1
-			_add_vertex(st, x00,         heights[i00], z00,         colors[i00])
-			_add_vertex(st, x00 + step,  heights[i10], z00,         colors[i10])
-			_add_vertex(st, x00,         heights[i01], z00 + step,  colors[i01])
-
-			# Triangle 2
-			_add_vertex(st, x00 + step,  heights[i10], z00,         colors[i10])
-			_add_vertex(st, x00 + step,  heights[i11], z00 + step,  colors[i11])
-			_add_vertex(st, x00,         heights[i01], z00 + step,  colors[i01])
-
-	st.generate_normals()
 	var arr_mesh := st.commit()
 	self.mesh = arr_mesh
 
-	# Material
+	# Material — smooth shading with noise normal map for micro detail
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
-	mat.roughness  = 0.96
-	mat.metallic   = 0.02
+	mat.roughness = 0.92
+	mat.metallic = 0.02
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+	# Procedural normal map — adds surface texture that catches light
+	var normal_noise := FastNoiseLite.new()
+	normal_noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	normal_noise.frequency = 0.3
+	normal_noise.seed = seed_val + 999
+	var normal_tex := NoiseTexture2D.new()
+	normal_tex.noise = normal_noise
+	normal_tex.width = 512
+	normal_tex.height = 512
+	normal_tex.as_normal_map = true
+	normal_tex.bump_strength = 4.0
+	mat.normal_enabled = true
+	mat.normal_texture = normal_tex
+	mat.normal_scale = 0.6
+	mat.uv1_scale = Vector3(8.0, 8.0, 8.0)
+
 	self.material_override = mat
 
 	# Shadow — terrain receives shadows, doesn't cast
