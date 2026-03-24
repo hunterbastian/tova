@@ -146,7 +146,7 @@ func build_spawn_sanctum(seed_val: int, terrain: MeshInstance3D) -> void:
 
 	var shrine_x := 7.6 + _rng.randf() * 1.4
 	var shrine_z := 2.4 + _rng.randf() * 1.2
-	var shrine_y := terrain.sample_height(shrine_x, shrine_z)
+	var shrine_y: float = terrain.sample_height(shrine_x, shrine_z)
 
 	var shrine := Node3D.new()
 	shrine.position = Vector3(shrine_x, shrine_y, shrine_z)
@@ -233,7 +233,7 @@ func build_spawn_sanctum(seed_val: int, terrain: MeshInstance3D) -> void:
 		var t := float(index) / 6.0
 		var px := lerpf(0.0, shrine_x, t)
 		var pz := lerpf(0.0, shrine_z, t)
-		var py := terrain.sample_height(px, pz) + 0.05
+		var py: float = terrain.sample_height(px, pz) + 0.05
 		var stone_mesh := BoxMesh.new()
 		stone_mesh.size = Vector3(
 			0.44 + _rng.randf() * 0.18,
@@ -254,13 +254,14 @@ func build_spawn_sanctum(seed_val: int, terrain: MeshInstance3D) -> void:
 		var dist := GameState.SPAWN_RADIUS + 2.0 + _rng.randf() * (GameState.SPAWN_BLEND_RADIUS - GameState.SPAWN_RADIUS + 6.0)
 		var rx := cos(angle) * dist
 		var rz := sin(angle) * dist
-		var ry := terrain.sample_height(rx, rz)
+		var ry: float = terrain.sample_height(rx, rz)
 		_create_rock(Vector3(rx, ry, rz), 0.25 + _rng.randf() * 0.45)
 
 	# Grass tufts — 180 instanced
 	var grass_mm := MultiMesh.new()
-	var grass_cone := ConeMesh.new()
-	grass_cone.radius = 0.15
+	var grass_cone := CylinderMesh.new()
+	grass_cone.top_radius = 0.0
+	grass_cone.bottom_radius = 0.15
 	grass_cone.height = 0.55
 	grass_cone.radial_segments = 4
 	grass_mm.mesh = grass_cone
@@ -272,7 +273,7 @@ func build_spawn_sanctum(seed_val: int, terrain: MeshInstance3D) -> void:
 		var dist := 1.5 + _rng.randf() * (GameState.SPAWN_BLEND_RADIUS + 10.0)
 		var gx := cos(angle) * dist
 		var gz := sin(angle) * dist
-		var gy := terrain.sample_height(gx, gz)
+		var gy: float = terrain.sample_height(gx, gz)
 		var basis := Basis.from_scale(Vector3(
 			0.6 + _rng.randf() * 0.6,
 			0.7 + _rng.randf() * 0.8,
@@ -310,8 +311,9 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 	trunk_mm.instance_count = TREE_COUNT
 
 	# Canopy MultiMesh
-	var canopy_mesh := ConeMesh.new()
-	canopy_mesh.radius = 1.35
+	var canopy_mesh := CylinderMesh.new()
+	canopy_mesh.top_radius = 0.0
+	canopy_mesh.bottom_radius = 1.35
 	canopy_mesh.height = 3.8
 	canopy_mesh.radial_segments = 8
 
@@ -336,7 +338,7 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 		if spawn_distance < GameState.SPAWN_BLEND_RADIUS + 4.0 or castle_distance < 16.0:
 			continue
 
-		var y := terrain.sample_height(x, z)
+		var y: float = terrain.sample_height(x, z)
 		var trunk_height := 2.0 + _rng.randf() * 1.6
 		var canopy_height := 3.1 + _rng.randf() * 1.4
 		var canopy_scale := 0.8 + _rng.randf() * 0.55
@@ -372,7 +374,7 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 		var distance := 8.0 + _rng.randf() * 24.0
 		var x := fc.x + cos(angle) * distance
 		var z := fc.z + sin(angle) * distance
-		var y := terrain.sample_height(x, z)
+		var y: float = terrain.sample_height(x, z)
 		_create_rock(Vector3(x, y, z), 0.45 + _rng.randf() * 0.55)
 
 
@@ -385,7 +387,7 @@ func build_castle(seed_val: int, terrain: MeshInstance3D) -> void:
 
 	var cx := GameState.castle_center.x
 	var cz := GameState.castle_center.z
-	var base_y := terrain.sample_height(cx, cz)
+	var base_y: float = terrain.sample_height(cx, cz)
 
 	var wall_mat := _create_flat_material("#68675f", 0.95, 0.03)
 	var roof_mat := _create_flat_material("#3f3933", 0.92, 0.01)
@@ -441,8 +443,9 @@ func build_castle(seed_val: int, terrain: MeshInstance3D) -> void:
 		tower.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		castle.add_child(tower)
 
-		var roof_mesh := ConeMesh.new()
-		roof_mesh.radius = 2.85
+		var roof_mesh := CylinderMesh.new()
+		roof_mesh.top_radius = 0.0
+		roof_mesh.bottom_radius = 2.85
 		roof_mesh.height = 3.8
 		roof_mesh.radial_segments = 10
 		var roof := MeshInstance3D.new()
@@ -485,7 +488,7 @@ func build_castle(seed_val: int, terrain: MeshInstance3D) -> void:
 		var distance := 14.0 + _rng.randf() * 12.0
 		var x := cx + cos(angle) * distance
 		var z := cz + sin(angle) * distance
-		var y := terrain.sample_height(x, z)
+		var y: float = terrain.sample_height(x, z)
 		_create_rock(Vector3(x, y, z), 0.5 + _rng.randf() * 0.7, "#7a756c")
 
 
@@ -539,7 +542,7 @@ func build_haze(seed_val: int, terrain: MeshInstance3D) -> void:
 	for index in range(3):
 		var origin_x := -18.0 + _rng.randf() * 52.0
 		var origin_z := 28.0 + _rng.randf() * 46.0
-		var origin_y := terrain.sample_height(origin_x, origin_z)
+		var origin_y: float = terrain.sample_height(origin_x, origin_z)
 
 		var ruin := Node3D.new()
 		ruin.position = Vector3(origin_x, origin_y, origin_z)

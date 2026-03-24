@@ -37,7 +37,7 @@ func _setup_world_environment() -> void:
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
 	env.fog_density = 0.012
 	env.fog_light_color = Color("#d8c8b8")
-	env.tonemap_mode = Environment.TONE_MAP_REINHARD
+	env.tonemap_mode = Environment.TONE_MAP_FILMIC
 	env.tonemap_exposure = 1.35
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#c8a878")
