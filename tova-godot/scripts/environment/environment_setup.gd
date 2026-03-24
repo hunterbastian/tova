@@ -47,10 +47,28 @@ func _setup_world_environment() -> void:
 	env.volumetric_fog_length = 200.0
 	env.volumetric_fog_sky_affect = 0.05
 	env.volumetric_fog_gi_inject = 0.0
-	env.tonemap_exposure = 0.8
+	env.tonemap_exposure = 0.9
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#4a4038")
-	env.ambient_light_energy = 0.6
+	env.ambient_light_color = Color("#5a5048")
+	env.ambient_light_energy = 0.7
+
+	# SSAO — ambient occlusion for depth in crevices and under trees
+	env.ssao_enabled = true
+	env.ssao_radius = 2.0
+	env.ssao_intensity = 1.5
+	env.ssao_power = 1.5
+
+	# SSIL — indirect lighting bounce for more natural light
+	env.ssil_enabled = true
+	env.ssil_radius = 5.0
+	env.ssil_intensity = 0.8
+
+	# Glow — subtle bloom on bright areas (brazier flames, sky horizon)
+	env.glow_enabled = true
+	env.glow_intensity = 0.4
+	env.glow_strength = 0.8
+	env.glow_bloom = 0.1
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = env
@@ -61,10 +79,11 @@ func _setup_world_environment() -> void:
 # ---------------------------------------------------------------------------
 func _setup_sun() -> void:
 	_sun = DirectionalLight3D.new()
-	_sun.light_color = Color("#a08060")
-	_sun.light_energy = 1.2
+	_sun.light_color = Color("#b89070")
+	_sun.light_energy = 1.5
 	_sun.shadow_enabled = true
 	_sun.directional_shadow_max_distance = 280.0
+	_sun.shadow_bias = 0.05
 	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	add_child(_sun)
 	_sun.look_at_from_position(Vector3(88.0, 200.0, -24.0), Vector3.ZERO)
