@@ -191,7 +191,9 @@ func _toggle_pause() -> void:
 func _toggle_god_mode() -> void:
 	_god_mode = not _god_mode
 	# Disable collision in god mode
-	$CollisionShape3D.disabled = _god_mode
+	var col_shape := get_node_or_null("CollisionShape3D")
+	if col_shape:
+		col_shape.disabled = _god_mode
 	_toggle_pause()
 
 # ---------------------------------------------------------------------------
