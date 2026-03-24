@@ -434,7 +434,7 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 	add_child(trunk_mmi)
 
 	# Canopy tiers — gradient from dark (top) to lighter (bottom)
-	var tier_colors := ["#1a3a18", "#224422", "#2a5228", "#326032"]
+	var tier_colors := ["#1a4018", "#225024", "#2a5a28", "#326a32"]
 	for tier_idx in range(4):
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = tier_mms[tier_idx]

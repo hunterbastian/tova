@@ -3,14 +3,14 @@ extends MeshInstance3D
 # ---------------------------------------------------------------------------
 # Terrain palette (from world.js lines 11-18)
 # ---------------------------------------------------------------------------
-const PALETTE_GRASS    := Color("#5a8a48")
-const PALETTE_SPAWN    := Color("#6a9a56")
-const PALETTE_FOREST   := Color("#3a6a2a")
-const PALETTE_HIGHLAND := Color("#6a6a5a")
-const PALETTE_SLOPE    := Color("#4a7a3a")
-const PALETTE_DRY      := Color("#4a6a32")
-const PALETTE_ROCK     := Color("#7a7a72")
-const PALETTE_SNOW     := Color("#e8e8f0")
+const PALETTE_GRASS    := Color("#5a9a48")  # lush alpine meadow
+const PALETTE_SPAWN    := Color("#68a858")  # bright green near spawn
+const PALETTE_FOREST   := Color("#3a6828")  # dark conifer forest
+const PALETTE_HIGHLAND := Color("#7a9a5a")  # high alpine meadow (above treeline)
+const PALETTE_SLOPE    := Color("#5a8a42")  # grassy slopes
+const PALETTE_DRY      := Color("#8a9a68")  # dry alpine grass
+const PALETTE_ROCK     := Color("#8a8a82")  # grey limestone
+const PALETTE_SNOW     := Color("#f0f0f8")  # bright clean snow
 
 # ---------------------------------------------------------------------------
 # Member variables
@@ -101,22 +101,23 @@ func _build_terrain_context(seed_val: int) -> void:
 # sample_height — core height function (world.js 148-199)
 # ---------------------------------------------------------------------------
 func sample_height(x: float, z: float) -> float:
-	var broad := _noise_broad.get_noise_3d(x + _offset_x, 0.15, z + _offset_z) * 20.0
-	var hills := _noise_hills.get_noise_3d(x + _offset_x, 0.32, z + _offset_z) * 8.0
-	var ridge := _noise_ridge.get_noise_3d(x - _ridge_offset, 0.52, z + _ridge_offset * 0.35) * 3.0
+	# Swiss alpine terrain — broad valleys with dramatic but rounded peaks
+	var broad := _noise_broad.get_noise_3d(x + _offset_x, 0.15, z + _offset_z) * 12.0
+	var hills := _noise_hills.get_noise_3d(x + _offset_x, 0.32, z + _offset_z) * 5.0
+	var ridge := _noise_ridge.get_noise_3d(x - _ridge_offset, 0.52, z + _ridge_offset * 0.35) * 2.0
 
 	# Mountain peaks — sharper falloff for pointy peaks, not round bumps
 	var peak_lift := 0.0
 	for peak in _mountain_peaks:
 		var peak_dist := Vector2(x - peak["pos"].x, z - peak["pos"].z).length()
 		var peak_raw := maxf(0.0, 1.0 - peak_dist / peak["radius"])
-		# Power curve for sharper peaks — steeper near the top
-		var sharp := peak_raw * peak_raw * peak_raw  # cubic falloff = pointy
-		# Add jagged detail near peaks using high-freq noise
-		var jagged := 0.0
-		if peak_raw > 0.1:
-			jagged = _noise_ridge.get_noise_3d(x * 3.0, 0.8, z * 3.0) * 12.0 * peak_raw
-		peak_lift += sharp * peak["height"] + jagged
+		# Swiss Alps shape — broad rounded summit with steep sides
+		var shaped := _smootherstep(peak_raw) * _smootherstep(peak_raw)  # double smootherstep = broad top, steep flanks
+		# Gentle rocky detail — not jagged, just textured
+		var detail := 0.0
+		if peak_raw > 0.2:
+			detail = _noise_ridge.get_noise_3d(x * 2.0, 0.8, z * 2.0) * 4.0 * peak_raw
+		peak_lift += shaped * peak["height"] + detail
 
 	# Ridge lines — continuous mountain ridges connecting nearby peaks
 	# Uses absolute-value noise (creates sharp creases = ridges)
@@ -131,23 +132,24 @@ func sample_height(x: float, z: float) -> float:
 		mountain_proximity = maxf(mountain_proximity, maxf(0.0, 1.0 - pd / (peak["radius"] * 1.5)))
 	ridge_height *= mountain_proximity
 
-	# Canyons — carved valleys using sharp negative noise
-	var canyon_noise := _noise_broad.get_noise_3d(
-		(x + _offset_z) * 1.5, 1.2, (z + _offset_x) * 1.5
+	# Alpine valleys — gentle carved valleys between mountains
+	var valley_noise := _noise_broad.get_noise_3d(
+		(x + _offset_z) * 1.2, 1.2, (z + _offset_x) * 1.2
 	)
 	var canyon_depth := 0.0
-	if canyon_noise > 0.3:
-		# Sharp canyon walls — only carve where noise is above threshold
-		canyon_depth = (canyon_noise - 0.3) * 40.0
-		canyon_depth *= _smootherstep(mountain_proximity * 1.5)  # stronger near mountains
+	if valley_noise > 0.25:
+		# Smooth U-shaped valleys, not sharp canyons
+		var valley_raw := (valley_noise - 0.25) * 2.0
+		canyon_depth = _smootherstep(valley_raw) * 25.0
+		canyon_depth *= mountain_proximity  # only near mountains
 
-	# Rock formations — jagged outcrops at mid-to-high elevations
-	var rock_noise := absf(_noise_ridge.get_noise_3d(
-		x * 2.0 + _ridge_offset, 1.5, z * 2.0 - _ridge_offset
-	))
+	# Gentle rock texture at high elevations — not jagged outcrops
+	var rock_noise := _noise_ridge.get_noise_3d(
+		x * 1.5 + _ridge_offset, 1.5, z * 1.5 - _ridge_offset
+	)
 	var rock_formations := 0.0
-	if mountain_proximity > 0.2:
-		rock_formations = (1.0 - rock_noise) * 15.0 * mountain_proximity
+	if mountain_proximity > 0.3:
+		rock_formations = rock_noise * 5.0 * mountain_proximity
 
 	# Forest lift
 	var forest_dist := Vector2(x - _forest_center.x, z - _forest_center.z).length()
