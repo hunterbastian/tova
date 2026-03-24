@@ -16,22 +16,22 @@ func _ready() -> void:
 	_setup_sun()
 	_setup_spawn_fill_light()
 	_setup_moon()
+	_setup_cloud_volumes()
 
 # ---------------------------------------------------------------------------
 # WorldEnvironment
 # ---------------------------------------------------------------------------
 func _setup_world_environment() -> void:
-	var sky_material := PhysicalSkyMaterial.new()
-	sky_material.rayleigh_color = Color("#2a3a50")
-	sky_material.mie_color = Color("#6a5040")
-	sky_material.ground_color = Color("#1a1510")
-	sky_material.turbidity = 14.0
-	sky_material.sun_disk_scale = 3.0
-	sky_material.energy_multiplier = 0.6
+	var sky_material := ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = Color("#1a2a3a")
+	sky_material.sky_horizon_color = Color("#4a3a30")
+	sky_material.ground_bottom_color = Color("#0a0a08")
+	sky_material.ground_horizon_color = Color("#2a2018")
+	sky_material.sky_curve = 0.1
+	sky_material.ground_curve = 0.1
 
 	var sky := Sky.new()
 	sky.sky_material = sky_material
-	sky.radiance_size = Sky.RADIANCE_SIZE_256
 
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
@@ -41,11 +41,12 @@ func _setup_world_environment() -> void:
 	env.fog_density = 0.012
 	env.fog_light_color = Color("#3a3228")
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.02
-	env.volumetric_fog_albedo = Color("#4a4a50")
-	env.volumetric_fog_emission = Color("#2a2a30")
+	env.volumetric_fog_density = 0.005
+	env.volumetric_fog_albedo = Color("#2a2a28")
+	env.volumetric_fog_emission = Color("#1a1a18")
 	env.volumetric_fog_length = 200.0
-	env.volumetric_fog_sky_affect = 0.3
+	env.volumetric_fog_sky_affect = 0.05
+	env.volumetric_fog_gi_inject = 0.0
 	env.tonemap_exposure = 0.8
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#4a4038")
@@ -99,6 +100,33 @@ func _setup_moon() -> void:
 	_moon.material_override = mat
 	_moon.position = Vector3(-110.0, 92.0, -210.0)
 	add_child(_moon)
+
+# ---------------------------------------------------------------------------
+# Cloud volumes — FogVolume nodes placed high for cloud layer
+# ---------------------------------------------------------------------------
+func _setup_cloud_volumes() -> void:
+	var cloud_mat := FogMaterial.new()
+	cloud_mat.density = 0.15
+	cloud_mat.albedo = Color("#4a4a50")
+
+	# Several cloud patches at high altitude
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 42
+	for i in range(12):
+		var fog_vol := FogVolume.new()
+		fog_vol.shape = RenderingServer.FOG_VOLUME_SHAPE_ELLIPSOID
+		fog_vol.size = Vector3(
+			15.0 + rng.randf() * 25.0,
+			1.5 + rng.randf() * 2.5,
+			12.0 + rng.randf() * 20.0
+		)
+		fog_vol.position = Vector3(
+			-120.0 + rng.randf() * 240.0,
+			180.0 + rng.randf() * 80.0,
+			-120.0 + rng.randf() * 240.0
+		)
+		fog_vol.material = cloud_mat
+		add_child(fog_vol)
 
 # ---------------------------------------------------------------------------
 # Public API

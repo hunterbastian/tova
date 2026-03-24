@@ -78,11 +78,9 @@ func regenerate_world() -> void:
 	_terrain.clear_terrain()
 	_structures.clear_structures()
 
-	# Generate new world
+	# Generate new world — nature only
 	_terrain.generate_terrain(seed_val)
-	_structures.build_spawn_sanctum(seed_val, _terrain)
 	_structures.build_forest(seed_val, _terrain)
-	_structures.build_castle(seed_val, _terrain)
 	_structures.build_haze(seed_val, _terrain)
 
 	# Position environment lights

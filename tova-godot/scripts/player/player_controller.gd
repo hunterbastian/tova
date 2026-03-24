@@ -31,12 +31,22 @@ var _sword_anchor: Node3D
 var _sword_swing: float = 0.0
 const SWORD_SWING_DURATION := 0.28
 
+# God mode / pause
+var _god_mode: bool = false
+var _paused: bool = false
+var _pause_menu: Control
+const GOD_FLY_SPEED := 30.0
+const GOD_FAST_FLY_SPEED := 80.0
+
 # ---------------------------------------------------------------------------
 # _ready
 # ---------------------------------------------------------------------------
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_setup_sword_viewmodel()
+	_setup_pause_menu()
+	# Allow this node to process during pause
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 # ---------------------------------------------------------------------------
 # Sword viewmodel — visible when has_sword is true
@@ -124,9 +134,77 @@ func _setup_sword_viewmodel() -> void:
 	_sword_anchor.add_child(_sword_group)
 
 # ---------------------------------------------------------------------------
+# Pause menu
+# ---------------------------------------------------------------------------
+func _setup_pause_menu() -> void:
+	_pause_menu = Control.new()
+	_pause_menu.name = "PauseMenu"
+	_pause_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_menu.visible = false
+
+	# Dark overlay
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.6)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_menu.add_child(overlay)
+
+	# Center container
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_CENTER)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 12)
+
+	# Title
+	var title := Label.new()
+	title.text = "PAUSED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 32)
+	vbox.add_child(title)
+
+	# Resume button
+	var resume_btn := Button.new()
+	resume_btn.text = "Resume"
+	resume_btn.custom_minimum_size = Vector2(200, 40)
+	resume_btn.pressed.connect(_toggle_pause)
+	vbox.add_child(resume_btn)
+
+	# God mode button
+	var god_btn := Button.new()
+	god_btn.text = "Toggle God Mode"
+	god_btn.custom_minimum_size = Vector2(200, 40)
+	god_btn.pressed.connect(_toggle_god_mode)
+	vbox.add_child(god_btn)
+
+	_pause_menu.add_child(vbox)
+	add_child(_pause_menu)
+
+func _toggle_pause() -> void:
+	_paused = not _paused
+	_pause_menu.visible = _paused
+	if _paused:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		get_tree().paused = true
+	else:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		get_tree().paused = false
+
+func _toggle_god_mode() -> void:
+	_god_mode = not _god_mode
+	# Disable collision in god mode
+	$CollisionShape3D.disabled = _god_mode
+	_toggle_pause()
+
+# ---------------------------------------------------------------------------
 # _unhandled_input
 # ---------------------------------------------------------------------------
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		_toggle_pause()
+		return
+
+	if _paused:
+		return
+
 	if event is InputEventMouseMotion:
 		rotate_y(-event.relative.x * LOOK_SENSITIVITY)
 		_head.rotation.x = clampf(
@@ -140,9 +218,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif GameState.has_sword and _sword_swing <= 0:
 			_sword_swing = SWORD_SWING_DURATION
 
-	if event.is_action_pressed("ui_cancel"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
 	# Sword pickup
 	if event.is_action_pressed("interact"):
 		_try_pickup_sword()
@@ -151,6 +226,14 @@ func _unhandled_input(event: InputEvent) -> void:
 # _physics_process
 # ---------------------------------------------------------------------------
 func _physics_process(delta: float) -> void:
+	if _paused:
+		return
+
+	# ── god mode (noclip fly) ──────────────────────────────────────────────
+	if _god_mode:
+		_process_god_mode(delta)
+		return
+
 	# ── input ──────────────────────────────────────────────────────────────
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var is_sprinting := Input.is_action_pressed("sprint")
@@ -230,6 +313,29 @@ func _physics_process(delta: float) -> void:
 		effort = -0.22
 	GameState.fatigue = clampf(GameState.fatigue - effort * delta, 0.22, 1.0)
 	GameState.magicka = clampf(GameState.magicka + 0.05 * delta, 0.18, 0.88)
+
+# ---------------------------------------------------------------------------
+# God mode — free flight, no collision
+# ---------------------------------------------------------------------------
+func _process_god_mode(delta: float) -> void:
+	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var is_sprinting := Input.is_action_pressed("sprint")
+	var fly_speed := GOD_FAST_FLY_SPEED if is_sprinting else GOD_FLY_SPEED
+
+	# Fly in camera look direction (including pitch)
+	var cam_basis := _camera.global_transform.basis
+	var fly_dir := Vector3.ZERO
+	fly_dir += cam_basis.z * input_dir.y  # forward/back follows camera pitch
+	fly_dir += cam_basis.x * input_dir.x  # strafe
+	if Input.is_action_pressed("jump"):
+		fly_dir += Vector3.UP
+	if fly_dir.length_squared() > 0.001:
+		fly_dir = fly_dir.normalized()
+
+	global_position += fly_dir * fly_speed * delta
+
+	_camera_sway_time += delta
+	_update_sword(delta)
 
 # ---------------------------------------------------------------------------
 # Sword
