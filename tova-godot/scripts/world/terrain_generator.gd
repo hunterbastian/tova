@@ -105,12 +105,49 @@ func sample_height(x: float, z: float) -> float:
 	var hills := _noise_hills.get_noise_3d(x + _offset_x, 0.32, z + _offset_z) * 8.0
 	var ridge := _noise_ridge.get_noise_3d(x - _ridge_offset, 0.52, z + _ridge_offset * 0.35) * 3.0
 
-	# Mountain peaks — multiple peaks with varying height and radius
+	# Mountain peaks — sharper falloff for pointy peaks, not round bumps
 	var peak_lift := 0.0
 	for peak in _mountain_peaks:
 		var peak_dist := Vector2(x - peak["pos"].x, z - peak["pos"].z).length()
 		var peak_raw := maxf(0.0, 1.0 - peak_dist / peak["radius"])
-		peak_lift += _smootherstep(peak_raw) * peak["height"]
+		# Power curve for sharper peaks — steeper near the top
+		var sharp := peak_raw * peak_raw * peak_raw  # cubic falloff = pointy
+		# Add jagged detail near peaks using high-freq noise
+		var jagged := 0.0
+		if peak_raw > 0.1:
+			jagged = _noise_ridge.get_noise_3d(x * 3.0, 0.8, z * 3.0) * 12.0 * peak_raw
+		peak_lift += sharp * peak["height"] + jagged
+
+	# Ridge lines — continuous mountain ridges connecting nearby peaks
+	# Uses absolute-value noise (creates sharp creases = ridges)
+	var ridge_noise := absf(_noise_hills.get_noise_3d(
+		(x + _offset_x) * 0.6, 0.7, (z + _offset_z) * 0.6
+	))
+	var ridge_height := (1.0 - ridge_noise) * 40.0  # inverted: valleys between ridges
+	# Only apply ridges where there's already elevation (near mountains)
+	var mountain_proximity := 0.0
+	for peak in _mountain_peaks:
+		var pd := Vector2(x - peak["pos"].x, z - peak["pos"].z).length()
+		mountain_proximity = maxf(mountain_proximity, maxf(0.0, 1.0 - pd / (peak["radius"] * 1.5)))
+	ridge_height *= mountain_proximity
+
+	# Canyons — carved valleys using sharp negative noise
+	var canyon_noise := _noise_broad.get_noise_3d(
+		(x + _offset_z) * 1.5, 1.2, (z + _offset_x) * 1.5
+	)
+	var canyon_depth := 0.0
+	if canyon_noise > 0.3:
+		# Sharp canyon walls — only carve where noise is above threshold
+		canyon_depth = (canyon_noise - 0.3) * 40.0
+		canyon_depth *= _smootherstep(mountain_proximity * 1.5)  # stronger near mountains
+
+	# Rock formations — jagged outcrops at mid-to-high elevations
+	var rock_noise := absf(_noise_ridge.get_noise_3d(
+		x * 2.0 + _ridge_offset, 1.5, z * 2.0 - _ridge_offset
+	))
+	var rock_formations := 0.0
+	if mountain_proximity > 0.2:
+		rock_formations = (1.0 - rock_noise) * 15.0 * mountain_proximity
 
 	# Forest lift
 	var forest_dist := Vector2(x - _forest_center.x, z - _forest_center.z).length()
@@ -120,7 +157,7 @@ func sample_height(x: float, z: float) -> float:
 	var castle_dist_lift := Vector2(x - _castle_center.x, z - _castle_center.z).length()
 	var castle_lift := maxf(0.0, 1.0 - castle_dist_lift / 108.0) * 4.0
 
-	var height := 8.0 + broad + hills + ridge + peak_lift + forest_lift + castle_lift
+	var height := 8.0 + broad + hills + ridge + peak_lift + ridge_height + rock_formations - canyon_depth + forest_lift + castle_lift
 
 	# Spawn flatten
 	# Secondary noise calls use _noise_broad (freq 0.0143 ≈ 1/70).
