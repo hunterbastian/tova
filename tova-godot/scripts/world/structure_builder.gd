@@ -384,7 +384,7 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 			continue
 
 		var y: float = terrain.sample_height(x, z)
-		var trunk_height := 3.5 + _rng.randf() * 6.0  # 3.5-9.5 units — big variation
+		var trunk_height := 5.0 + _rng.randf() * 5.0  # 5-10 units — taller minimum
 		var tree_scale := 0.6 + _rng.randf() * 0.8  # 0.6-1.4 — wide size range
 
 		# Trunk — tall and tapered
@@ -394,7 +394,7 @@ func build_forest(seed_val: int, terrain: MeshInstance3D) -> void:
 		))
 
 		# 4 canopy tiers stacked up the trunk — each rotated and slightly irregular
-		var canopy_start := y + trunk_height * 0.4
+		var canopy_start := y + trunk_height * 0.6
 		var tier_spacing := trunk_height * 0.17
 		var tier_overlap := 0.3 + _rng.randf() * 0.2  # how much tiers overlap
 		for tier_idx in range(4):
