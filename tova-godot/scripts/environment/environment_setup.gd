@@ -62,7 +62,18 @@ func _setup_world_environment() -> void:
 	env.fog_sun_scatter = 0.3
 	env.fog_sky_affect = 0.4
 
+	# ── Volumetric fog — atmospheric depth between trees ──────────────────
+	env.volumetric_fog_enabled = true
+	env.volumetric_fog_density = 0.01
+	env.volumetric_fog_albedo = Color("#8a8070")
+	env.volumetric_fog_emission = Color("#3a3530")
+	env.volumetric_fog_emission_energy = 0.3
+	env.volumetric_fog_length = 150.0
+	env.volumetric_fog_sky_affect = 0.0
+
 	# ── Tonemap ───────────────────────────────────────────────────────────
+	# AgX not available in this Godot version — use ACES Fitted instead
+	env.tonemap_mode = 3  # TONE_MAP_ACES
 	env.tonemap_exposure = 1.1
 	env.tonemap_white = 6.0
 
@@ -90,8 +101,8 @@ func _setup_world_environment() -> void:
 	# ── Adjustments — slight color grading ────────────────────────────────
 	env.adjustment_enabled = true
 	env.adjustment_brightness = 1.05
-	env.adjustment_contrast = 1.08
-	env.adjustment_saturation = 1.1
+	env.adjustment_contrast = 1.3
+	env.adjustment_saturation = 1.3
 
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = env
