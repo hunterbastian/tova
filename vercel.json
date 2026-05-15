@@ -1,0 +1,5 @@
+{
+  "installCommand": "cd tova-web && npm install",
+  "buildCommand": "cd tova-web && npm run build",
+  "outputDirectory": "tova-web/dist"
+}
